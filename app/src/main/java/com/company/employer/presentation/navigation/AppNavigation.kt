@@ -1,0 +1,181 @@
+package com.company.employer.presentation.navigation
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.company.employer.data.local.TokenManager
+import com.company.employer.presentation.calendar.CalendarScreen
+import com.company.employer.presentation.login.LoginScreen
+import com.company.employer.presentation.notifications.NotificationsScreen
+import com.company.employer.presentation.notifications.NotificationsViewModel
+import com.company.employer.presentation.profile.ProfileScreen
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
+
+sealed class Screen(val route: String) {
+    data object Login : Screen("login")
+    data object Calendar : Screen("calendar")
+    data object Notifications : Screen("notifications")
+    data object Profile : Screen("profile")
+}
+
+sealed class BottomNavScreen(val route: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    data object Calendar : BottomNavScreen("calendar", "Calendrier", Icons.Default.CalendarMonth)
+    data object Profile : BottomNavScreen("profile", "Profil", Icons.Default.Person)
+}
+
+@Composable
+fun AppNavigation() {
+    val navController = rememberNavController()
+    val tokenManager: TokenManager = koinInject()
+    val scope = rememberCoroutineScope()
+
+    var isLoggedIn by remember { mutableStateOf(false) }
+    var isCheckingAuth by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        scope.launch {
+            val token = tokenManager.getAccessToken().first()
+            isLoggedIn = token != null
+            isCheckingAuth = false
+        }
+    }
+
+    if (isCheckingAuth) {
+        // Show splash or loading
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+            CircularProgressIndicator()
+        }
+    } else {
+        NavHost(
+            navController = navController,
+            startDestination = if (isLoggedIn) Screen.Calendar.route else Screen.Login.route
+        ) {
+            composable(Screen.Login.route) {
+                LoginScreen(
+                    onNavigateToHome = {
+                        navController.navigate(Screen.Calendar.route) {
+                            popUpTo(Screen.Login.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
+
+            composable(Screen.Calendar.route) {
+                MainScreen(
+                    onNavigateToNotifications = {
+                        navController.navigate(Screen.Notifications.route)
+                    },
+                    onLogout = {
+                        scope.launch {
+                            tokenManager.clearTokens()
+                            navController.navigate(Screen.Login.route) {
+                                popUpTo(0) { inclusive = true }
+                            }
+                        }
+                    }
+                )
+            }
+
+            composable(Screen.Notifications.route) {
+                NotificationsScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(Screen.Profile.route) {
+                ProfileScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onLogout = {
+                        scope.launch {
+                            tokenManager.clearTokens()
+                            navController.navigate(Screen.Login.route) {
+                                popUpTo(0) { inclusive = true }
+                            }
+                        }
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun MainScreen(
+    onNavigateToNotifications: () -> Unit,
+    onLogout: () -> Unit
+) {
+    val navController = rememberNavController()
+    val notificationsViewModel: NotificationsViewModel = koinViewModel()
+    val notificationState by notificationsViewModel.state.collectAsStateWithLifecycle()
+
+    Scaffold(
+        bottomBar = {
+            NavigationBar {
+                val navBackStackEntry by navController.currentBackStackEntryAsState()
+                val currentDestination = navBackStackEntry?.destination
+
+                listOf(
+                    BottomNavScreen.Calendar,
+                    BottomNavScreen.Profile
+                ).forEach { screen ->
+                    NavigationBarItem(
+                        icon = {
+                            BadgedBox(
+                                badge = {
+                                    if (screen == BottomNavScreen.Calendar && notificationState.unreadCount > 0) {
+                                        Badge { Text(notificationState.unreadCount.toString()) }
+                                    }
+                                }
+                            ) {
+                                Icon(screen.icon, contentDescription = screen.title)
+                            }
+                        },
+                        label = { Text(screen.title) },
+                        selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                        onClick = {
+                            navController.navigate(screen.route) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    )
+                }
+            }
+        }
+    ) { padding ->
+        NavHost(
+            navController = navController,
+            startDestination = BottomNavScreen.Calendar.route,
+            modifier = Modifier.padding(padding)
+        ) {
+            composable(BottomNavScreen.Calendar.route) {
+                CalendarScreen(onNavigateToNotifications = onNavigateToNotifications)
+            }
+
+            composable(BottomNavScreen.Profile.route) {
+                ProfileScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onLogout = onLogout
+                )
+            }
+        }
+    }
+}

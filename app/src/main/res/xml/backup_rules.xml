@@ -1,0 +1,4 @@
+<full-backup-content>
+    <exclude domain="sharedpref" path="token_prefs.preferences_pb" />
+    <exclude domain="sharedpref" path="encrypted_tokens.xml" />
+</full-backup-content>
