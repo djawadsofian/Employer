@@ -18,7 +18,7 @@ android {
         versionName = "1.0.0"
 
         // Backend URL configuration
-        buildConfigField("String", "API_BASE_URL", "\"http://10.42.0.1:8000/\"") // Android emulator
+        buildConfigField("String", "API_BASE_URL", "\"http://10.176.127.95:8000/\"") // Android emulator
         // For production: buildConfigField("String", "API_BASE_URL", "\"https://your-api.com\"")
     }
 
