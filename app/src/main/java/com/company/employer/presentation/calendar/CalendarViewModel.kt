@@ -14,12 +14,13 @@ import java.time.format.DateTimeFormatter
 data class CalendarState(
     val events: List<DataCalendarEvent> = emptyList(),
     val filteredEvents: List<DataCalendarEvent> = emptyList(),
-    val selectedDate: LocalDate = LocalDate.now(),
+    val selectedDate: LocalDate? = null,
     val selectedEventType: EventTypeFilter = EventTypeFilter.ALL,
     val isLoading: Boolean = false,
     val error: String? = null,
     val selectedEvent: DataCalendarEvent? = null,
-    val userName: String = ""
+    val userName: String = "",
+    val selectedWilaya: String? = null
 )
 
 enum class EventTypeFilter {
@@ -33,6 +34,9 @@ sealed class CalendarUiEvent {
     data class EventClicked(val event: DataCalendarEvent) : CalendarUiEvent()
     data object DismissEventDetails : CalendarUiEvent()
     data object Refresh : CalendarUiEvent()
+
+    data class FiltersApplied(val eventType: EventTypeFilter, val wilaya: String?) : CalendarUiEvent()
+    data object ClearDateSelection : CalendarUiEvent()
 }
 
 class CalendarViewModel(
@@ -55,6 +59,7 @@ class CalendarViewModel(
                 _state.value = _state.value.copy(selectedDate = event.date)
                 filterEventsByDate(event.date)
             }
+
             is CalendarUiEvent.EventTypeSelected -> {
                 _state.value = _state.value.copy(selectedEventType = event.type)
                 filterEvents()
@@ -66,6 +71,18 @@ class CalendarViewModel(
                 _state.value = _state.value.copy(selectedEvent = null)
             }
             is CalendarUiEvent.Refresh -> loadEvents()
+
+            is CalendarUiEvent.FiltersApplied -> {
+                _state.value = _state.value.copy(
+                    selectedEventType = event.eventType,
+                    selectedWilaya = event.wilaya
+                )
+                filterEvents()
+            }
+            is CalendarUiEvent.ClearDateSelection -> {
+                _state.value = _state.value.copy(selectedDate = null)
+                filterEvents()
+            }
         }
     }
 
@@ -117,11 +134,26 @@ class CalendarViewModel(
 
     private fun filterEvents() {
         val currentState = _state.value
-        val filtered = when (currentState.selectedEventType) {
-            EventTypeFilter.ALL -> currentState.events
-            EventTypeFilter.PROJECT -> currentState.events.filter { it.type == "project" }
-            EventTypeFilter.MAINTENANCE -> currentState.events.filter { it.type == "maintenance" }
+        var filtered = currentState.events
+
+        // Filter by event type
+        filtered = when (currentState.selectedEventType) {
+            EventTypeFilter.ALL -> filtered
+            EventTypeFilter.PROJECT -> filtered.filter { it.type == "project" }
+            EventTypeFilter.MAINTENANCE -> filtered.filter { it.type == "maintenance" }
         }
+
+        // Filter by wilaya
+        currentState.selectedWilaya?.let { wilaya ->
+            filtered = filtered.filter { it.clientAddress.province == wilaya }
+        }
+
+        // Filter by selected date if exists
+        currentState.selectedDate?.let { date ->
+            val dateStr = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
+            filtered = filtered.filter { it.start.startsWith(dateStr) }
+        }
+
         _state.value = currentState.copy(filteredEvents = filtered)
     }
 }

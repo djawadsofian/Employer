@@ -55,6 +55,7 @@ fun CalendarScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var showFilterSheet by remember { mutableStateOf(false) }
+    val hasActiveFilters = state.selectedEventType != EventTypeFilter.ALL || state.selectedWilaya != null
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Background gradient
@@ -77,7 +78,8 @@ fun CalendarScreen(
                 PremiumTopBar(
                     userName = state.userName,
                     onNotificationsClick = onNavigateToNotifications,
-                    onFilterClick = { showFilterSheet = true }
+                    onFilterClick = { showFilterSheet = true },
+                    hasActiveFilters = hasActiveFilters
                 )
             }
         ) { padding ->
@@ -101,10 +103,12 @@ fun CalendarScreen(
                             .padding(padding)
 
                     ) {
-                        // Calendar Section - Reduced height
+                        // Calendar Section
                         CalendarSection(
                             events = state.events,
                             selectedDate = state.selectedDate,
+                            selectedEventType = state.selectedEventType,
+                            selectedWilaya = state.selectedWilaya,
                             onDateSelected = { date ->
                                 viewModel.onEvent(CalendarUiEvent.DateSelected(date))
                             }
@@ -119,13 +123,16 @@ fun CalendarScreen(
                             selectedFilter = state.selectedEventType,
                             onEventClick = { event ->
                                 viewModel.onEvent(CalendarUiEvent.EventClicked(event))
+                            },
+                            onClearDateSelection = {
+                                viewModel.onEvent(CalendarUiEvent.ClearDateSelection)
                             }
                         )
                     }
                 }
             }
 
-            // Event Details Modal (unchanged)
+            // Event Details Modal
             state.selectedEvent?.let { event ->
                 EventDetailsModal(
                     event = event,
@@ -136,9 +143,10 @@ fun CalendarScreen(
             // Filter Bottom Sheet
             if (showFilterSheet) {
                 FilterBottomSheet(
-                    selectedFilter = state.selectedEventType,
-                    onFilterSelected = { filter ->
-                        viewModel.onEvent(CalendarUiEvent.EventTypeSelected(filter))
+                    selectedEventType = state.selectedEventType,
+                    selectedWilaya = state.selectedWilaya,
+                    onFiltersApplied = { eventType, wilaya ->
+                        viewModel.onEvent(CalendarUiEvent.FiltersApplied(eventType, wilaya))
                         showFilterSheet = false
                     },
                     onDismiss = { showFilterSheet = false }
@@ -148,13 +156,13 @@ fun CalendarScreen(
     }
 }
 
-// KEEP ORIGINAL TopBar - UNCHANGED
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PremiumTopBar(
     userName: String,
     onNotificationsClick: () -> Unit,
-    onFilterClick: () -> Unit
+    onFilterClick: () -> Unit,
+    hasActiveFilters: Boolean
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -192,12 +200,15 @@ fun PremiumTopBar(
                         modifier = Modifier
                             .size(48.dp)
                             .background(
-                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                if (hasActiveFilters)
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                else
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
                                 CircleShape
                             )
                     ) {
                         Icon(
-                            Icons.Outlined.FilterList,
+                            if (hasActiveFilters) Icons.Filled.FilterAlt else Icons.Outlined.FilterList,
                             contentDescription = "Filtrer",
                             tint = MaterialTheme.colorScheme.primary
                         )
@@ -241,7 +252,9 @@ fun PremiumTopBar(
 @Composable
 fun CalendarSection(
     events: List<CalendarEvent>,
-    selectedDate: LocalDate,
+    selectedDate: LocalDate?,
+    selectedEventType: EventTypeFilter,
+    selectedWilaya: String?,
     onDateSelected: (LocalDate) -> Unit
 ) {
     val currentMonth = remember { YearMonth.now() }
@@ -256,6 +269,19 @@ fun CalendarSection(
         firstVisibleMonth = currentMonth,
         firstDayOfWeek = firstDayOfWeek
     )
+
+    // Filter events based on selected filters
+    val filteredEvents = remember(events, selectedEventType, selectedWilaya) {
+        events.filter { event ->
+            val matchesType = when (selectedEventType) {
+                EventTypeFilter.ALL -> true
+                EventTypeFilter.PROJECT -> event.type == "project"
+                EventTypeFilter.MAINTENANCE -> event.type == "maintenance"
+            }
+            val matchesWilaya = selectedWilaya == null || event.clientAddress.province == selectedWilaya
+            matchesType && matchesWilaya
+        }
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -355,12 +381,17 @@ fun CalendarSection(
             HorizontalCalendar(
                 state = calendarState,
                 dayContent = { day ->
+                    val dayEvents = filteredEvents.filter { event ->
+                        event.start.startsWith(day.date.toString())
+                    }
+                    val hasProjects = dayEvents.any { it.type == "project" }
+                    val hasMaintenance = dayEvents.any { it.type == "maintenance" }
+
                     Day(
                         day = day,
                         isSelected = day.date == selectedDate,
-                        hasEvents = events.any { event ->
-                            event.start.startsWith(day.date.toString())
-                        },
+                        hasProjects = hasProjects,
+                        hasMaintenance = hasMaintenance,
                         isToday = day.date == LocalDate.now(),
                         onClick = { onDateSelected(day.date) }
                     )
@@ -375,7 +406,8 @@ fun CalendarSection(
 fun Day(
     day: CalendarDay,
     isSelected: Boolean,
-    hasEvents: Boolean,
+    hasProjects: Boolean,
+    hasMaintenance: Boolean,
     isToday: Boolean,
     onClick: () -> Unit
 ) {
@@ -428,28 +460,74 @@ fun Day(
                 fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal
             )
 
-            if (hasEvents && isCurrentMonth) {
+            if ((hasProjects || hasMaintenance) && isCurrentMonth) {
                 Spacer(modifier = Modifier.height(4.dp))
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (isSelected) MaterialTheme.colorScheme.onPrimary
-                            else MaterialTheme.colorScheme.primary
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (hasProjects && hasMaintenance) {
+                        // Both - show split indicator
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(0.5f)
+                                    .background(
+                                        if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                        else MaterialTheme.colorScheme.tertiary
+                                    )
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(0.5f)
+                                    .align(Alignment.CenterEnd)
+                                    .background(
+                                        if (isSelected) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                                        else MaterialTheme.colorScheme.secondary
+                                    )
+                            )
+                        }
+                    } else if (hasProjects) {
+                        // Projects only
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                    else MaterialTheme.colorScheme.tertiary
+                                )
                         )
-                )
+                    } else if (hasMaintenance) {
+                        // Maintenance only
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                    else MaterialTheme.colorScheme.secondary
+                                )
+                        )
+                    }
+                }
             }
         }
     }
 }
-
 @Composable
 fun EventsSection(
-    selectedDate: LocalDate,
+    selectedDate: LocalDate?,
     events: List<CalendarEvent>,
     selectedFilter: EventTypeFilter,
-    onEventClick: (CalendarEvent) -> Unit
+    onEventClick: (CalendarEvent) -> Unit,
+    onClearDateSelection: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
         // Section Header
@@ -461,20 +539,39 @@ fun EventsSection(
             verticalAlignment = Alignment.Top
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = when (selectedFilter) {
-                        EventTypeFilter.ALL -> selectedDate.format(
-                            DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.FRENCH)
-                        ).replaceFirstChar { it.uppercase() }
-                        EventTypeFilter.PROJECT -> "Projets"
-                        EventTypeFilter.MAINTENANCE -> "Maintenances"
-                    },
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = if (selectedDate != null) {
+                            selectedDate.format(
+                                DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.FRENCH)
+                            ).replaceFirstChar { it.uppercase() }
+                        } else {
+                            "Tous les événements"
+                        },
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    if (selectedDate != null) {
+                        IconButton(
+                            onClick = onClearDateSelection,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Voir tous les événements",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
 
                 Text(
                     text = "${events.size} événement${if (events.size > 1) "s" else ""}",
@@ -740,7 +837,7 @@ fun EmptyEventsState() {
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Aucun événement prévu pour cette date",
+                text = "Aucun événement prévu pour cette sélection",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -749,7 +846,6 @@ fun EmptyEventsState() {
     }
 }
 
-// KEEP EVENT DETAILS MODAL - UNCHANGED
 @Composable
 fun EventDetailsModal(
     event: CalendarEvent,
@@ -1062,13 +1158,31 @@ fun DetailRow(
     }
 }
 
+// Algerian Wilayas List
+val ALGERIAN_WILAYAS = listOf(
+    "Adrar", "Chlef", "Laghouat", "Oum El Bouaghi", "Batna", "Béjaïa", "Biskra", "Béchar",
+    "Blida", "Bouira", "Tamanrasset", "Tébessa", "Tlemcen", "Tiaret", "Tizi Ouzou", "Alger",
+    "Djelfa", "Jijel", "Sétif", "Saïda", "Skikda", "Sidi Bel Abbès", "Annaba", "Guelma",
+    "Constantine", "Médéa", "Mostaganem", "M'Sila", "Mascara", "Ouargla", "Oran", "El Bayadh",
+    "Illizi", "Bordj Bou Arréridj", "Boumerdès", "El Tarf", "Tindouf", "Tissemsilt", "El Oued",
+    "Khenchela", "Souk Ahras", "Tipaza", "Mila", "Aïn Defla", "Naâma", "Aïn Témouchent",
+    "Ghardaïa", "Relizane", "Timimoun", "Bordj Badji Mokhtar", "Ouled Djellal",
+    "Béni Abbès", "In Salah", "In Guezzam", "Touggourt", "Djanet", "El M'Ghair", "El Meniaa"
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FilterBottomSheet(
-    selectedFilter: EventTypeFilter,
-    onFilterSelected: (EventTypeFilter) -> Unit,
+    selectedEventType: EventTypeFilter,
+    selectedWilaya: String?,
+    onFiltersApplied: (EventTypeFilter, String?) -> Unit,
     onDismiss: () -> Unit
 ) {
+    var tempEventType by remember { mutableStateOf(selectedEventType) }
+    var tempWilaya by remember { mutableStateOf(selectedWilaya) }
+    var showEventTypeMenu by remember { mutableStateOf(false) }
+    var showWilayaMenu by remember { mutableStateOf(false) }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
@@ -1100,94 +1214,288 @@ fun FilterBottomSheet(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            EventTypeFilter.entries.forEach { filter ->
-                FilterOption(
-                    icon = when (filter) {
-                        EventTypeFilter.ALL -> Icons.Outlined.Event
-                        EventTypeFilter.PROJECT -> Icons.Outlined.Work
-                        EventTypeFilter.MAINTENANCE -> Icons.Outlined.Build
-                    },
-                    label = when (filter) {
-                        EventTypeFilter.ALL -> "Tous les événements"
-                        EventTypeFilter.PROJECT -> "Projets uniquement"
-                        EventTypeFilter.MAINTENANCE -> "Maintenances uniquement"
-                    },
-                    isSelected = filter == selectedFilter,
-                    onClick = { onFilterSelected(filter) }
-                )
-            }
+            // Event Type Filter
+            Text(
+                text = "Type d'événement",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
 
-            Spacer(modifier = Modifier.height(24.dp))
-        }
-    }
-}
-
-@Composable
-fun FilterOption(
-    icon: ImageVector,
-    label: String,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        shape = RoundedCornerShape(16.dp),
-        color = if (isSelected)
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-        else
-            Color.Transparent,
-        onClick = onClick
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
             Surface(
-                modifier = Modifier.size(40.dp),
-                shape = RoundedCornerShape(10.dp),
-                color = if (isSelected)
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                else
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                onClick = { showEventTypeMenu = !showEventTypeMenu }
             ) {
-                Box(contentAlignment = Alignment.Center) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = when (tempEventType) {
+                                EventTypeFilter.ALL -> Icons.Outlined.Event
+                                EventTypeFilter.PROJECT -> Icons.Outlined.Work
+                                EventTypeFilter.MAINTENANCE -> Icons.Outlined.Build
+                            },
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = when (tempEventType) {
+                                EventTypeFilter.ALL -> "Tous les événements"
+                                EventTypeFilter.PROJECT -> "Projets"
+                                EventTypeFilter.MAINTENANCE -> "Maintenances"
+                            },
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                     Icon(
-                        imageVector = icon,
+                        imageVector = if (showEventTypeMenu) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                         contentDescription = null,
-                        tint = if (isSelected)
-                            MaterialTheme.colorScheme.primary
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            // Event Type Dropdown
+            AnimatedVisibility(
+                visible = showEventTypeMenu,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                ) {
+                    Column {
+                        EventTypeFilter.entries.forEach { filter ->
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = if (filter == tempEventType)
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                                else Color.Transparent,
+                                onClick = {
+                                    tempEventType = filter
+                                    showEventTypeMenu = false
+                                }
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = when (filter) {
+                                            EventTypeFilter.ALL -> Icons.Outlined.Event
+                                            EventTypeFilter.PROJECT -> Icons.Outlined.Work
+                                            EventTypeFilter.MAINTENANCE -> Icons.Outlined.Build
+                                        },
+                                        contentDescription = null,
+                                        tint = if (filter == tempEventType)
+                                            MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        text = when (filter) {
+                                            EventTypeFilter.ALL -> "Tous les événements"
+                                            EventTypeFilter.PROJECT -> "Projets"
+                                            EventTypeFilter.MAINTENANCE -> "Maintenances"
+                                        },
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = if (filter == tempEventType) FontWeight.SemiBold else FontWeight.Normal,
+                                        color = if (filter == tempEventType)
+                                            MaterialTheme.colorScheme.onSurface
+                                        else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            if (filter != EventTypeFilter.entries.last()) {
+                                HorizontalDivider(
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
 
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                color = if (isSelected)
-                    MaterialTheme.colorScheme.onSurface
-                else
-                    MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f)
-            )
+            Spacer(modifier = Modifier.height(20.dp))
 
-            if (isSelected) {
+            // Wilaya Filter
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Wilaya",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                if (tempWilaya != null) {
+                    TextButton(
+                        onClick = { tempWilaya = null },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "Réinitialiser",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                onClick = { showWilayaMenu = !showWilayaMenu }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.LocationOn,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = tempWilaya ?: "Toutes les wilayas",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (tempWilaya != null)
+                                MaterialTheme.colorScheme.onSurface
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Icon(
+                        imageVector = if (showWilayaMenu) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // Wilaya Dropdown
+            AnimatedVisibility(
+                visible = showWilayaMenu,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                        .heightIn(max = 300.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                ) {
+                    LazyColumn {
+                        items(ALGERIAN_WILAYAS) { wilaya ->
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = if (wilaya == tempWilaya)
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                                else Color.Transparent,
+                                onClick = {
+                                    tempWilaya = wilaya
+                                    showWilayaMenu = false
+                                }
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = wilaya,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = if (wilaya == tempWilaya) FontWeight.SemiBold else FontWeight.Normal,
+                                        color = if (wilaya == tempWilaya)
+                                            MaterialTheme.colorScheme.onSurface
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    if (wilaya == tempWilaya) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Apply Button
+            Button(
+                onClick = {
+                    onFiltersApplied(tempEventType, tempWilaya)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
                 Icon(
                     imageVector = Icons.Default.Check,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Appliquer les filtres",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
+
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
