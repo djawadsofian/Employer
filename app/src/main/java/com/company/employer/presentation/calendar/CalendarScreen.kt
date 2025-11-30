@@ -35,6 +35,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.company.employer.data.model.CalendarEvent
+import com.company.employer.presentation.notifications.NotificationBadgeButton
+import com.company.employer.presentation.notifications.NotificationBadgeViewModel
 import com.kizitonwose.calendar.compose.HorizontalCalendar
 import com.kizitonwose.calendar.compose.rememberCalendarState
 import com.kizitonwose.calendar.core.*
@@ -50,8 +52,9 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun CalendarScreen(
-    onNavigateToNotifications: () -> Unit,
-    viewModel: CalendarViewModel = koinViewModel()
+    onNavigateToNotifications: () -> Unit, // This can be removed if not needed
+    viewModel: CalendarViewModel = koinViewModel(),
+    notificationBadgeViewModel: NotificationBadgeViewModel = koinViewModel() // Add this
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var showFilterSheet by remember { mutableStateOf(false) }
@@ -77,12 +80,13 @@ fun CalendarScreen(
             topBar = {
                 PremiumTopBar(
                     userName = state.userName,
-                    onNotificationsClick = onNavigateToNotifications,
                     onFilterClick = { showFilterSheet = true },
-                    hasActiveFilters = hasActiveFilters
+                    hasActiveFilters = hasActiveFilters,
+                    notificationBadgeViewModel = notificationBadgeViewModel // Pass it here
                 )
             }
         ) { padding ->
+            // Rest of the screen content remains the same...
             when {
                 state.isLoading -> {
                     LoadingIndicator(modifier = Modifier.fillMaxSize())
@@ -101,7 +105,6 @@ fun CalendarScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(padding)
-
                     ) {
                         // Calendar Section
                         CalendarSection(
@@ -160,9 +163,9 @@ fun CalendarScreen(
 @Composable
 fun PremiumTopBar(
     userName: String,
-    onNotificationsClick: () -> Unit,
     onFilterClick: () -> Unit,
-    hasActiveFilters: Boolean
+    hasActiveFilters: Boolean,
+    notificationBadgeViewModel: NotificationBadgeViewModel // Add this parameter
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -214,30 +217,8 @@ fun PremiumTopBar(
                         )
                     }
 
-                    IconButton(
-                        onClick = onNotificationsClick,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .background(
-                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                                CircleShape
-                            )
-                    ) {
-                        BadgedBox(
-                            badge = {
-                                Badge(
-                                    containerColor = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.offset(x = (-4).dp, y = 4.dp)
-                                )
-                            }
-                        ) {
-                            Icon(
-                                Icons.Outlined.Notifications,
-                                contentDescription = "Notifications",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
+                    // Replace the old notification button with the new NotificationBadgeButton
+                    NotificationBadgeButton(viewModel = notificationBadgeViewModel)
                 }
             }
 

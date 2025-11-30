@@ -7,6 +7,7 @@ import com.company.employer.data.repository.*
 import com.company.employer.domain.usecase.*
 import com.company.employer.presentation.calendar.CalendarViewModel
 import com.company.employer.presentation.login.LoginViewModel
+import com.company.employer.presentation.notifications.NotificationBadgeViewModel
 import com.company.employer.presentation.notifications.NotificationsViewModel
 import com.company.employer.presentation.profile.ProfileViewModel
 import org.koin.android.ext.koin.androidContext
@@ -38,4 +39,5 @@ val appModule = module {
     viewModel { CalendarViewModel(get(), get()) }
     viewModel { NotificationsViewModel(get(), get(), get()) }
     viewModel { ProfileViewModel(get(), get(), get()) }
+    viewModel { NotificationBadgeViewModel(get(), get(), get(), get()) }
 }

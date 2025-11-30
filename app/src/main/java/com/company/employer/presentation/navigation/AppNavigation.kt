@@ -18,7 +18,7 @@ import androidx.navigation.compose.rememberNavController
 import com.company.employer.data.local.TokenManager
 import com.company.employer.presentation.calendar.CalendarScreen
 import com.company.employer.presentation.login.LoginScreen
-import com.company.employer.presentation.notifications.NotificationsScreen
+//import com.company.employer.presentation.notifications.NotificationsScreen
 import com.company.employer.presentation.notifications.NotificationsViewModel
 import com.company.employer.presentation.profile.ProfileScreen
 import kotlinx.coroutines.flow.first
@@ -91,11 +91,11 @@ fun AppNavigation() {
                 )
             }
 
-            composable(Screen.Notifications.route) {
-                NotificationsScreen(
-                    onNavigateBack = { navController.popBackStack() }
-                )
-            }
+//            composable(Screen.Notifications.route) {
+//                NotificationsScreen(
+//                    onNavigateBack = { navController.popBackStack() }
+//                )
+//            }
 
             composable(Screen.Profile.route) {
                 ProfileScreen(
