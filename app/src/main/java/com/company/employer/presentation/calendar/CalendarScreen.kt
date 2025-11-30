@@ -531,6 +531,7 @@ fun EventsSection(
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
         // Section Header
+        // Section Header - MODIFIED VERSION
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -539,39 +540,20 @@ fun EventsSection(
             verticalAlignment = Alignment.Top
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = if (selectedDate != null) {
-                            selectedDate.format(
-                                DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.FRENCH)
-                            ).replaceFirstChar { it.uppercase() }
-                        } else {
-                            "Tous les événements"
-                        },
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    if (selectedDate != null) {
-                        IconButton(
-                            onClick = onClearDateSelection,
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Voir tous les événements",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-                }
+                Text(
+                    text = if (selectedDate != null) {
+                        selectedDate.format(
+                            DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.FRENCH)
+                        ).replaceFirstChar { it.uppercase() }
+                    } else {
+                        "Tous les événements"
+                    },
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
 
                 Text(
                     text = "${events.size} événement${if (events.size > 1) "s" else ""}",
@@ -583,11 +565,12 @@ fun EventsSection(
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            // Quick Stats
+            // Quick Stats and Clear Button in the same row
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.wrapContentWidth()
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                // Quick Stats
                 QuickStat(
                     count = events.count { it.type == "project" },
                     icon = Icons.Outlined.Work,
@@ -598,6 +581,25 @@ fun EventsSection(
                     icon = Icons.Outlined.Build,
                     color = MaterialTheme.colorScheme.secondary
                 )
+
+                // Clear Date Selection Button - ADDED HERE
+                if (selectedDate != null) {
+                    Surface(
+                        onClick = onClearDateSelection,
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Voir tous les événements",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
 
@@ -733,31 +735,31 @@ fun EventCard(
                     )
                 }
 
-                // Progress for projects
-                if (event.type == "project" && event.progressPercentage != null) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        LinearProgressIndicator(
-                            progress = (event.progressPercentage / 100).toFloat(),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(6.dp)
-                                .clip(RoundedCornerShape(3.dp)),
-                            color = accentColor,
-                            trackColor = accentColor.copy(alpha = 0.2f)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "${event.progressPercentage.toInt()}%",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = accentColor
-                        )
-                    }
-                }
+//                // Progress for projects
+//                if (event.type == "project" && event.progressPercentage != null) {
+//                    Spacer(modifier = Modifier.height(8.dp))
+//                    Row(
+//                        verticalAlignment = Alignment.CenterVertically,
+//                        modifier = Modifier.fillMaxWidth()
+//                    ) {
+//                        LinearProgressIndicator(
+//                            progress = (event.progressPercentage / 100).toFloat(),
+//                            modifier = Modifier
+//                                .weight(1f)
+//                                .height(6.dp)
+//                                .clip(RoundedCornerShape(3.dp)),
+//                            color = accentColor,
+//                            trackColor = accentColor.copy(alpha = 0.2f)
+//                        )
+//                        Spacer(modifier = Modifier.width(8.dp))
+//                        Text(
+//                            text = "${event.progressPercentage.toInt()}%",
+//                            style = MaterialTheme.typography.labelSmall,
+//                            fontWeight = FontWeight.Bold,
+//                            color = accentColor
+//                        )
+//                    }
+//                }
 
                 // Overdue badge
                 if (event.isOverdue == true) {
@@ -1005,15 +1007,7 @@ fun EventDetailsModal(
                         }
                     }
 
-                    if (event.maintenanceType != null) {
-                        item {
-                            DetailRow(
-                                icon = Icons.Outlined.Build,
-                                label = "Type de maintenance",
-                                value = event.maintenanceType
-                            )
-                        }
-                    }
+
 
                     if (event.progressPercentage != null && event.type == "project") {
                         item {
@@ -1160,14 +1154,64 @@ fun DetailRow(
 
 // Algerian Wilayas List
 val ALGERIAN_WILAYAS = listOf(
-    "Adrar", "Chlef", "Laghouat", "Oum El Bouaghi", "Batna", "Béjaïa", "Biskra", "Béchar",
-    "Blida", "Bouira", "Tamanrasset", "Tébessa", "Tlemcen", "Tiaret", "Tizi Ouzou", "Alger",
-    "Djelfa", "Jijel", "Sétif", "Saïda", "Skikda", "Sidi Bel Abbès", "Annaba", "Guelma",
-    "Constantine", "Médéa", "Mostaganem", "M'Sila", "Mascara", "Ouargla", "Oran", "El Bayadh",
-    "Illizi", "Bordj Bou Arréridj", "Boumerdès", "El Tarf", "Tindouf", "Tissemsilt", "El Oued",
-    "Khenchela", "Souk Ahras", "Tipaza", "Mila", "Aïn Defla", "Naâma", "Aïn Témouchent",
-    "Ghardaïa", "Relizane", "Timimoun", "Bordj Badji Mokhtar", "Ouled Djellal",
-    "Béni Abbès", "In Salah", "In Guezzam", "Touggourt", "Djanet", "El M'Ghair", "El Meniaa"
+    "Adrar",
+    "Chlef",
+    "Laghouat",
+    "Oum El Bouaghi",
+    "Batna",
+    "Béjaïa",
+    "Biskra",
+    "Béchar",
+    "Blida",
+    "Bouira",
+    "Tamanrasset",
+    "Tébessa",
+    "Tlemcen",
+    "Tiaret",
+    "Tizi Ouzou",
+    "Alger",
+    "Djelfa",
+    "Jijel",
+    "Sétif",
+    "Saïda",
+    "Skikda",
+    "Sidi Bel Abbès",
+    "Annaba",
+    "Guelma",
+    "Constantine",
+    "Médéa",
+    "Mostaganem",
+    "M'Sila",
+    "Mascara",
+    "Ouargla",
+    "Oran",
+    "El Bayadh",
+    "Illizi",
+    "Bordj Bou Arréridj",
+    "Boumerdès",
+    "El Tarf",
+    "Tindouf",
+    "Tissemsilt",
+    "El Oued",
+    "Khenchela",
+    "Souk Ahras",
+    "Tipaza",
+    "Mila",
+    "Aïn Defla",
+    "Naâma",
+    "Aïn Témouchent",
+    "Ghardaïa",
+    "Relizane",
+    "Timimoun",
+    "Bordj Badji Mokhtar",
+    "Ouled Djellal",
+    "Béni Abbès",
+    "In Salah",
+    "In Guezzam",
+    "Touggourt",
+    "Djanet",
+    "El M'Ghair",
+    "El Menia",
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1588,4 +1632,4 @@ fun ErrorMessage(
             }
         }
     }
-}
+} 
