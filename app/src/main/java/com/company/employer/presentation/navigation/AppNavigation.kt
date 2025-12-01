@@ -18,8 +18,8 @@ import androidx.navigation.compose.rememberNavController
 import com.company.employer.data.local.TokenManager
 import com.company.employer.presentation.calendar.CalendarScreen
 import com.company.employer.presentation.login.LoginScreen
-//import com.company.employer.presentation.notifications.NotificationsScreen
-import com.company.employer.presentation.notifications.NotificationsViewModel
+////import com.company.employer.presentation.notifications.NotificationsScreen
+//import com.company.employer.presentation.notifications.NotificationsViewModel
 import com.company.employer.presentation.profile.ProfileScreen
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -120,8 +120,8 @@ fun MainScreen(
     onLogout: () -> Unit
 ) {
     val navController = rememberNavController()
-    val notificationsViewModel: NotificationsViewModel = koinViewModel()
-    val notificationState by notificationsViewModel.state.collectAsStateWithLifecycle()
+//    val notificationsViewModel: NotificationsViewModel = koinViewModel()
+//    val notificationState by notificationsViewModel.state.collectAsStateWithLifecycle()
 
     Scaffold(
         bottomBar = {
@@ -137,9 +137,9 @@ fun MainScreen(
                         icon = {
                             BadgedBox(
                                 badge = {
-                                    if (screen == BottomNavScreen.Calendar && notificationState.unreadCount > 0) {
-                                        Badge { Text(notificationState.unreadCount.toString()) }
-                                    }
+//                                    if (screen == BottomNavScreen.Calendar && notificationState.unreadCount > 0) {
+//                                        Badge { Text(notificationState.unreadCount.toString()) }
+//                                    }
                                 }
                             ) {
                                 Icon(screen.icon, contentDescription = screen.title)

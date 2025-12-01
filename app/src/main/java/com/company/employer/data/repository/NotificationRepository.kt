@@ -10,27 +10,27 @@ import timber.log.Timber
 
 class NotificationRepository(private val apiService: ApiService) {
 
-    fun getNotifications(page: Int = 1): Flow<Result<List<Notification>>> = flow {
-        emit(Result.Loading)
-        try {
-            val response = apiService.getNotifications(page)
-            emit(Result.Success(response.results))
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to get notifications")
-            emit(Result.Error(e.message ?: "Échec de récupération des notifications"))
-        }
-    }
+//    fun getNotifications(page: Int = 1): Flow<Result<List<Notification>>> = flow {
+//        emit(Result.Loading)
+//        try {
+//            val response = apiService.getNotifications(page)
+//            emit(Result.Success(response.results))
+//        } catch (e: Exception) {
+//            Timber.e(e, "Failed to get notifications")
+//            emit(Result.Error(e.message ?: "Échec de récupération des notifications"))
+//        }
+//    }
 
-    fun getUnreadCount(): Flow<Result<Int>> = flow {
-        emit(Result.Loading)
-        try {
-            val response = apiService.getUnreadNotificationCount()
-            emit(Result.Success(response.count))
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to get unread count")
-            emit(Result.Error(e.message ?: "Échec de récupération du compteur"))
-        }
-    }
+//    fun getUnreadCount(): Flow<Result<Int>> = flow {
+//        emit(Result.Loading)
+//        try {
+//            val response = apiService.getUnreadNotificationCount()
+//            emit(Result.Success(response.count))
+//        } catch (e: Exception) {
+//            Timber.e(e, "Failed to get unread count")
+//            emit(Result.Error(e.message ?: "Échec de récupération du compteur"))
+//        }
+//    }
 
     suspend fun markAsRead(notificationId: Int): Result<Unit> {
         return try {

@@ -6,16 +6,12 @@ import com.company.employer.data.local.TokenManager
 import com.company.employer.data.model.Notification
 import com.company.employer.data.remote.NotificationSseService
 import com.company.employer.data.repository.NotificationRepository
-import com.company.employer.domain.usecase.GetNotificationsUseCase
-import com.company.employer.domain.usecase.GetUnreadCountUseCase
 import com.company.employer.domain.util.Result
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
 data class NotificationBadgeState(
-    val unreadCount: Int = 0,
-    val hasNewNotification: Boolean = false,
     val notifications: List<Notification> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
@@ -30,12 +26,9 @@ sealed class NotificationBadgeEvent {
     data object DismissNotificationDetails : NotificationBadgeEvent()
     data class MarkAsRead(val notificationId: Int) : NotificationBadgeEvent()
     data object MarkAllAsRead : NotificationBadgeEvent()
-    data object LoadNotifications : NotificationBadgeEvent()
 }
 
 class NotificationBadgeViewModel(
-    private val getNotificationsUseCase: GetNotificationsUseCase,
-    private val getUnreadCountUseCase: GetUnreadCountUseCase,
     private val notificationRepository: NotificationRepository,
     private val tokenManager: TokenManager
 ) : ViewModel() {
@@ -70,25 +63,20 @@ class NotificationBadgeViewModel(
 
     private fun handleNewNotification(notification: Notification) {
         val currentNotifications = _state.value.notifications.toMutableList()
-        currentNotifications.add(0, notification) // Add to top
 
-        val newUnreadCount = if (!notification.isRead) {
-            _state.value.unreadCount + 1
+        // Check if notification already exists (by ID)
+        val existingIndex = currentNotifications.indexOfFirst { it.id == notification.id }
+        if (existingIndex != -1) {
+            // Update existing notification
+            currentNotifications[existingIndex] = notification
         } else {
-            _state.value.unreadCount
+            // Add new notification to top
+            currentNotifications.add(0, notification)
         }
 
         _state.value = _state.value.copy(
-            notifications = currentNotifications,
-            hasNewNotification = true,
-            unreadCount = newUnreadCount
+            notifications = currentNotifications
         )
-
-        // Auto-hide the "new notification" indicator after 3 seconds
-        viewModelScope.launch {
-            kotlinx.coroutines.delay(3000)
-            _state.value = _state.value.copy(hasNewNotification = false)
-        }
     }
 
     fun onEvent(event: NotificationBadgeEvent) {
@@ -116,9 +104,6 @@ class NotificationBadgeViewModel(
             is NotificationBadgeEvent.MarkAllAsRead -> {
                 markAllAsRead()
             }
-            is NotificationBadgeEvent.LoadNotifications -> {
-                // No longer needed - we only use stream data
-            }
         }
     }
 
@@ -126,13 +111,10 @@ class NotificationBadgeViewModel(
         viewModelScope.launch {
             val result = notificationRepository.markAsRead(notificationId)
             if (result is Result.Success) {
-                // Update local state
-                val updatedNotifications = _state.value.notifications.map {
-                    if (it.id == notificationId) it.copy(isRead = true) else it
-                }
+                // Remove the notification from the list (backend handles it)
+                val updatedNotifications = _state.value.notifications.filter { it.id != notificationId }
                 _state.value = _state.value.copy(
-                    notifications = updatedNotifications,
-                    unreadCount = maxOf(0, _state.value.unreadCount - 1)
+                    notifications = updatedNotifications
                 )
             }
         }
@@ -142,12 +124,9 @@ class NotificationBadgeViewModel(
         viewModelScope.launch {
             val result = notificationRepository.markAllAsRead()
             if (result is Result.Success) {
-                val updatedNotifications = _state.value.notifications.map {
-                    it.copy(isRead = true)
-                }
+                // Clear all notifications (backend handles it)
                 _state.value = _state.value.copy(
-                    notifications = updatedNotifications,
-                    unreadCount = 0
+                    notifications = emptyList()
                 )
             }
         }

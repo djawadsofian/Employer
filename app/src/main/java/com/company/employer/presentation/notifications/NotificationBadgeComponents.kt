@@ -1,10 +1,10 @@
 package com.company.employer.presentation.notifications
 
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -15,7 +15,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -36,6 +35,7 @@ fun NotificationBadgeButton(
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val unreadCount = state.notifications.count { !it.isRead }
 
     Box {
         IconButton(
@@ -49,11 +49,17 @@ fun NotificationBadgeButton(
         ) {
             BadgedBox(
                 badge = {
-                    if (state.unreadCount > 0) {
-                        AnimatedBadge(
-                            count = state.unreadCount,
-                            hasNewNotification = state.hasNewNotification
-                        )
+                    if (unreadCount > 0) {
+                        Badge(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.offset(x = (-4).dp, y = 4.dp)
+                        ) {
+                            Text(
+                                text = if (unreadCount > 99) "99+" else unreadCount.toString(),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             ) {
@@ -65,13 +71,16 @@ fun NotificationBadgeButton(
             }
         }
 
-        // Notification List Dropdown - only show first 10 notifications
+        // Notification List Dropdown
         if (state.showNotificationList) {
             NotificationListDropdown(
-                notifications = state.notifications.take(10),
-                unreadCount = state.unreadCount,
+                notifications = state.notifications,
+                unreadCount = unreadCount,
                 onNotificationClick = { notification ->
                     viewModel.onEvent(NotificationBadgeEvent.NotificationClicked(notification))
+                },
+                onMarkAsRead = { notificationId ->
+                    viewModel.onEvent(NotificationBadgeEvent.MarkAsRead(notificationId))
                 },
                 onMarkAllAsRead = {
                     viewModel.onEvent(NotificationBadgeEvent.MarkAllAsRead)
@@ -101,51 +110,21 @@ fun NotificationBadgeButton(
 }
 
 @Composable
-fun AnimatedBadge(count: Int, hasNewNotification: Boolean) {
-    val infiniteTransition = rememberInfiniteTransition(label = "badge_pulse")
-    val scale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = if (hasNewNotification) 1.2f else 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(500),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "badge_scale"
-    )
-
-    Badge(
-        containerColor = if (hasNewNotification)
-            MaterialTheme.colorScheme.error
-        else
-            MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
-        modifier = Modifier
-            .offset(x = (-4).dp, y = 4.dp)
-            .scale(scale)
-    ) {
-        Text(
-            text = if (count > 99) "99+" else count.toString(),
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold
-        )
-    }
-}
-
-@Composable
 fun NotificationListDropdown(
     notifications: List<Notification>,
     unreadCount: Int,
     onNotificationClick: (Notification) -> Unit,
+    onMarkAsRead: (Int) -> Unit,
     onMarkAllAsRead: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Use DropdownMenu for proper positioning
     DropdownMenu(
         expanded = true,
         onDismissRequest = onDismiss,
         modifier = Modifier
-            .width(380.dp)
-            .heightIn(max = 500.dp),
+            .width(400.dp)
+            .heightIn(max = 600.dp),
         shape = RoundedCornerShape(16.dp)
     ) {
         // Header
@@ -186,15 +165,20 @@ fun NotificationListDropdown(
 
             HorizontalDivider()
 
-            // Notification List
+            // Notification List - Scrollable
             if (notifications.isEmpty()) {
                 EmptyNotificationsList()
             } else {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    notifications.forEach { notification ->
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 500.dp)
+                ) {
+                    items(notifications, key = { it.id }) { notification ->
                         NotificationListItem(
                             notification = notification,
-                            onClick = { onNotificationClick(notification) }
+                            onClick = { onNotificationClick(notification) },
+                            onMarkAsRead = { onMarkAsRead(notification.id) }
                         )
                     }
                 }
@@ -206,76 +190,108 @@ fun NotificationListDropdown(
 @Composable
 fun NotificationListItem(
     notification: Notification,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onMarkAsRead: () -> Unit
 ) {
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
+        modifier = Modifier.fillMaxWidth(),
         color = if (!notification.isRead)
             MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
         else
             Color.Transparent
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.Top
-        ) {
-            // Icon - use actualNotificationType
-            NotificationIcon(
-                type = notification.actualNotificationType,
-                priority = notification.priority,
-                modifier = Modifier.size(40.dp)
-            )
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onClick)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                // Icon
+                NotificationIcon(
+                    type = notification.actualNotificationType,
+                    priority = notification.priority,
+                    modifier = Modifier.size(40.dp)
+                )
 
-            Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(12.dp))
 
-            // Content
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
+                // Content
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Text(
+                            text = notification.title,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = if (!notification.isRead) FontWeight.Bold else FontWeight.Normal,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        if (!notification.isRead) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
                     Text(
-                        text = notification.title,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = if (!notification.isRead) FontWeight.Bold else FontWeight.Normal,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
+                        text = notification.message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
 
-                    if (!notification.isRead) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = formatNotificationTime(notification.createdAt),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // Mark as read button
+            if (!notification.isRead) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(
+                        onClick = onMarkAsRead,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            "Marquer comme lu",
+                            style = MaterialTheme.typography.labelSmall
                         )
                     }
                 }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = notification.message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = formatNotificationTime(notification.createdAt),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
+
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+            )
         }
     }
 }

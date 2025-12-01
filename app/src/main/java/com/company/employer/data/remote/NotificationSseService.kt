@@ -3,11 +3,10 @@ package com.company.employer.data.remote
 import android.util.Log
 import com.company.employer.BuildConfig
 import com.company.employer.data.model.Notification
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.*
 import okhttp3.sse.EventSource
@@ -18,6 +17,13 @@ import java.util.concurrent.TimeUnit
 data class SseNotificationEvent(
     val event: String,
     val data: Notification? = null
+)
+
+@Serializable
+data class SseWrapper(
+    val event: String,
+    val data: Notification? = null,
+    val timestamp: Long? = null
 )
 
 class NotificationSseService(private val accessToken: String) {
@@ -55,24 +61,28 @@ class NotificationSseService(private val accessToken: String) {
                 try {
                     Log.d("SSE", "Received raw event - type: $type, data: $data")
 
-                    // The backend sends notifications directly as the data
-                    // Each notification is a complete Notification object
-                    when (type) {
+                    // Parse the wrapper which contains the actual event type and notification data
+                    val wrapper = json.decodeFromString<SseWrapper>(data)
+
+                    when (wrapper.event) {
                         "connected" -> {
                             Log.d("SSE", "Connected to SSE stream")
                         }
                         "notification" -> {
-                            // Parse the notification directly
-                            val notification = json.decodeFromString<Notification>(data)
-                            Log.d("SSE", "Parsed notification: ${notification.title}")
-
-                            trySend(SseNotificationEvent(
-                                event = "notification",
-                                data = notification
-                            ))
+                            // The notification is in wrapper.data
+                            wrapper.data?.let { notification ->
+                                Log.d("SSE", "Parsed notification: ${notification.title}")
+                                trySend(SseNotificationEvent(
+                                    event = "notification",
+                                    data = notification
+                                ))
+                            } ?: Log.e("SSE", "Notification event with null data")
+                        }
+                        "ping" -> {
+                            Log.d("SSE", "Received ping at ${wrapper.timestamp}")
                         }
                         else -> {
-                            Log.d("SSE", "Unknown event type: $type")
+                            Log.d("SSE", "Unknown wrapper event type: ${wrapper.event}")
                         }
                     }
                 } catch (e: Exception) {

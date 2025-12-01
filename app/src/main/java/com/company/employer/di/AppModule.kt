@@ -8,7 +8,6 @@ import com.company.employer.domain.usecase.*
 import com.company.employer.presentation.calendar.CalendarViewModel
 import com.company.employer.presentation.login.LoginViewModel
 import com.company.employer.presentation.notifications.NotificationBadgeViewModel
-import com.company.employer.presentation.notifications.NotificationsViewModel
 import com.company.employer.presentation.profile.ProfileViewModel
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
@@ -31,13 +30,10 @@ val appModule = module {
     // Use Cases
     single { LoginUseCase(get()) }
     single { GetCalendarEventsUseCase(get()) }
-    single { GetNotificationsUseCase(get()) }
-    single { GetUnreadCountUseCase(get()) }
 
     // ViewModels
     viewModel { LoginViewModel(get(), get()) }
     viewModel { CalendarViewModel(get(), get()) }
-    viewModel { NotificationsViewModel(get(), get(), get()) }
     viewModel { ProfileViewModel(get(), get(), get()) }
-    viewModel { NotificationBadgeViewModel(get(), get(), get(), get()) }
+    viewModel { NotificationBadgeViewModel(get(), get()) }
 }

@@ -31,22 +31,12 @@ class ApiService(private val client: HttpClient) {
         }.body()
     }
 
-    suspend fun getNotifications(page: Int = 1): NotificationResponse {
-        return client.get("/api/notifications/") {
-            parameter("page", page)
-        }.body()
-    }
-
-    suspend fun getUnreadNotificationCount(): UnreadCountResponse {
-        return client.get("/api/notifications/unread-count/").body()
-    }
-
     suspend fun markNotificationAsRead(notificationId: Int) {
         client.post("/api/notifications/$notificationId/mark-read/")
     }
 
     suspend fun markAllNotificationsAsRead() {
-        client.post("/api/notifications/mark-all-read/")
+        client.post("/api/notifications/mark_all_read/")
     }
 
     suspend fun updateProfile(request: UpdateProfileRequest): User {
