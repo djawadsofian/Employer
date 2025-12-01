@@ -71,9 +71,9 @@ fun NotificationBadgeButton(
             }
         }
 
-        // Notification List Dropdown
+        // Notification List Dialog (instead of DropdownMenu)
         if (state.showNotificationList) {
-            NotificationListDropdown(
+            NotificationListDialog(
                 notifications = state.notifications,
                 unreadCount = unreadCount,
                 onNotificationClick = { notification ->
@@ -110,76 +110,81 @@ fun NotificationBadgeButton(
 }
 
 @Composable
-fun NotificationListDropdown(
+fun NotificationListDialog(
     notifications: List<Notification>,
     unreadCount: Int,
     onNotificationClick: (Notification) -> Unit,
     onMarkAsRead: (Int) -> Unit,
     onMarkAllAsRead: () -> Unit,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    onDismiss: () -> Unit
 ) {
-    DropdownMenu(
-        expanded = true,
+    Dialog(
         onDismissRequest = onDismiss,
-        modifier = Modifier
-            .width(400.dp)
-            .heightIn(max = 600.dp),
-        shape = RoundedCornerShape(16.dp)
+        properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        // Header
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "Notifications",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    if (unreadCount > 0) {
-                        Text(
-                            text = "$unreadCount non lu${if (unreadCount > 1) "s" else ""}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (unreadCount > 0) {
-                        TextButton(onClick = onMarkAllAsRead) {
-                            Text("Tout marquer", style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Fermer")
-                    }
-                }
-            }
-
-            HorizontalDivider()
-
-            // Notification List - Scrollable
-            if (notifications.isEmpty()) {
-                EmptyNotificationsList()
-            } else {
-                LazyColumn(
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .fillMaxHeight(0.8f),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Header
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 500.dp)
+                        .padding(20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    items(notifications, key = { it.id }) { notification ->
-                        NotificationListItem(
-                            notification = notification,
-                            onClick = { onNotificationClick(notification) },
-                            onMarkAsRead = { onMarkAsRead(notification.id) }
+                    Column {
+                        Text(
+                            text = "Notifications",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
                         )
+                        if (unreadCount > 0) {
+                            Text(
+                                text = "$unreadCount non lu${if (unreadCount > 1) "s" else ""}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (unreadCount > 0) {
+                            TextButton(onClick = onMarkAllAsRead) {
+                                Text("Tout marquer", style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Default.Close, contentDescription = "Fermer")
+                        }
+                    }
+                }
+
+                HorizontalDivider()
+
+                // Notification List - Scrollable
+                if (notifications.isEmpty()) {
+                    EmptyNotificationsList()
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    ) {
+                        items(notifications, key = { it.id }) { notification ->
+                            NotificationListItem(
+                                notification = notification,
+                                onClick = { onNotificationClick(notification) },
+                                onMarkAsRead = { onMarkAsRead(notification.id) }
+                            )
+                        }
                     }
                 }
             }
@@ -345,7 +350,8 @@ fun EmptyNotificationsList() {
         modifier = Modifier
             .fillMaxWidth()
             .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
         Icon(
             imageVector = Icons.Outlined.NotificationsNone,

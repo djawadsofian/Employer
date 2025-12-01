@@ -24,7 +24,7 @@ class ApiService(private val client: HttpClient) {
         startDate: String? = null,
         endDate: String? = null
     ): CalendarResponse {
-        return client.get("/api/my-calendar/") {
+        return client.get("/api/my-calendar/?is_verified=true") {
             eventType?.let { parameter("event_type", it) }
             startDate?.let { parameter("start_date", it) }
             endDate?.let { parameter("end_date", it) }
@@ -32,7 +32,7 @@ class ApiService(private val client: HttpClient) {
     }
 
     suspend fun markNotificationAsRead(notificationId: Int) {
-        client.post("/api/notifications/$notificationId/mark-read/")
+        client.post("/api/notifications/$notificationId/mark_read/")
     }
 
     suspend fun markAllNotificationsAsRead() {
