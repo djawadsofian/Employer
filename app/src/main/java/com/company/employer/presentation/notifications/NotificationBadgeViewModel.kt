@@ -46,13 +46,7 @@ class NotificationBadgeViewModel(
     private var sseService: NotificationSseService? = null
 
     init {
-        loadInitialData()
         startSseConnection()
-    }
-
-    private fun loadInitialData() {
-        loadNotifications()
-        loadUnreadCount()
     }
 
     private fun startSseConnection() {
@@ -78,10 +72,16 @@ class NotificationBadgeViewModel(
         val currentNotifications = _state.value.notifications.toMutableList()
         currentNotifications.add(0, notification) // Add to top
 
+        val newUnreadCount = if (!notification.isRead) {
+            _state.value.unreadCount + 1
+        } else {
+            _state.value.unreadCount
+        }
+
         _state.value = _state.value.copy(
             notifications = currentNotifications,
             hasNewNotification = true,
-            unreadCount = _state.value.unreadCount + 1
+            unreadCount = newUnreadCount
         )
 
         // Auto-hide the "new notification" indicator after 3 seconds
@@ -97,9 +97,6 @@ class NotificationBadgeViewModel(
                 _state.value = _state.value.copy(
                     showNotificationList = !_state.value.showNotificationList
                 )
-                if (_state.value.showNotificationList) {
-                    loadNotifications()
-                }
             }
             is NotificationBadgeEvent.DismissNotificationList -> {
                 _state.value = _state.value.copy(showNotificationList = false)
@@ -109,9 +106,6 @@ class NotificationBadgeViewModel(
                     selectedNotification = event.notification,
                     showNotificationList = false
                 )
-                if (!event.notification.isRead) {
-                    markAsRead(event.notification.id)
-                }
             }
             is NotificationBadgeEvent.DismissNotificationDetails -> {
                 _state.value = _state.value.copy(selectedNotification = null)
@@ -123,42 +117,7 @@ class NotificationBadgeViewModel(
                 markAllAsRead()
             }
             is NotificationBadgeEvent.LoadNotifications -> {
-                loadNotifications()
-            }
-        }
-    }
-
-    private fun loadNotifications() {
-        viewModelScope.launch {
-            getNotificationsUseCase().collect { result ->
-                when (result) {
-                    is Result.Loading -> {
-                        _state.value = _state.value.copy(isLoading = true)
-                    }
-                    is Result.Success -> {
-                        _state.value = _state.value.copy(
-                            notifications = result.data,
-                            isLoading = false,
-                            error = null
-                        )
-                    }
-                    is Result.Error -> {
-                        _state.value = _state.value.copy(
-                            isLoading = false,
-                            error = result.message
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    private fun loadUnreadCount() {
-        viewModelScope.launch {
-            getUnreadCountUseCase().collect { result ->
-                if (result is Result.Success) {
-                    _state.value = _state.value.copy(unreadCount = result.data)
-                }
+                // No longer needed - we only use stream data
             }
         }
     }

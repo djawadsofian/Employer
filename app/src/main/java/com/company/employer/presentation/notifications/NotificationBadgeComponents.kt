@@ -1,10 +1,10 @@
 package com.company.employer.presentation.notifications
+
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -65,10 +65,10 @@ fun NotificationBadgeButton(
             }
         }
 
-        // Notification List Dropdown
+        // Notification List Dropdown - only show first 10 notifications
         if (state.showNotificationList) {
             NotificationListDropdown(
-                notifications = state.notifications.take(5), // Show max 5
+                notifications = state.notifications.take(10),
                 unreadCount = state.unreadCount,
                 onNotificationClick = { notification ->
                     viewModel.onEvent(NotificationBadgeEvent.NotificationClicked(notification))
@@ -89,10 +89,12 @@ fun NotificationBadgeButton(
                 onDismiss = {
                     viewModel.onEvent(NotificationBadgeEvent.DismissNotificationDetails)
                 },
-                onMarkAsRead = {
-                    viewModel.onEvent(NotificationBadgeEvent.MarkAsRead(notification.id))
-                    viewModel.onEvent(NotificationBadgeEvent.DismissNotificationDetails)
-                }
+                onMarkAsRead = if (!notification.isRead) {
+                    {
+                        viewModel.onEvent(NotificationBadgeEvent.MarkAsRead(notification.id))
+                        viewModel.onEvent(NotificationBadgeEvent.DismissNotificationDetails)
+                    }
+                } else null
             )
         }
     }
@@ -137,19 +139,17 @@ fun NotificationListDropdown(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier
+    // Use DropdownMenu for proper positioning
+    DropdownMenu(
+        expanded = true,
+        onDismissRequest = onDismiss,
+        modifier = Modifier
             .width(380.dp)
-            .heightIn(max = 500.dp)
-            .padding(top = 8.dp),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+            .heightIn(max = 500.dp),
+        shape = RoundedCornerShape(16.dp)
     ) {
+        // Header
         Column(modifier = Modifier.fillMaxWidth()) {
-            // Header
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -190,11 +190,8 @@ fun NotificationListDropdown(
             if (notifications.isEmpty()) {
                 EmptyNotificationsList()
             } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentPadding = PaddingValues(vertical = 8.dp)
-                ) {
-                    items(notifications, key = { it.id }) { notification ->
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    notifications.forEach { notification ->
                         NotificationListItem(
                             notification = notification,
                             onClick = { onNotificationClick(notification) }
@@ -226,9 +223,9 @@ fun NotificationListItem(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.Top
         ) {
-            // Icon
+            // Icon - use actualNotificationType
             NotificationIcon(
-                type = notification.notificationType,
+                type = notification.actualNotificationType,
                 priority = notification.priority,
                 modifier = Modifier.size(40.dp)
             )
@@ -353,7 +350,7 @@ fun EmptyNotificationsList() {
 fun NotificationDetailsDialog(
     notification: Notification,
     onDismiss: () -> Unit,
-    onMarkAsRead: () -> Unit
+    onMarkAsRead: (() -> Unit)? = null
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -429,7 +426,7 @@ fun NotificationDetailsDialog(
 
                     item { HorizontalDivider() }
 
-                    notification.projectName?.let {
+                    notification.actualProjectName?.let {
                         item {
                             DetailRow(
                                 icon = Icons.Outlined.Work,
@@ -439,7 +436,7 @@ fun NotificationDetailsDialog(
                         }
                     }
 
-                    notification.clientName?.let {
+                    notification.actualClientName?.let {
                         item {
                             DetailRow(
                                 icon = Icons.Outlined.Person,
@@ -476,18 +473,16 @@ fun NotificationDetailsDialog(
                         .padding(20.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    if (!notification.isRead) {
+                    onMarkAsRead?.let { markAsReadAction ->
                         FilledTonalButton(
-                            onClick = onMarkAsRead,
+                            onClick = markAsReadAction,
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Icon(Icons.Default.Check, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Marquer comme lu")
                         }
-                    } else {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
+                    } ?: Spacer(modifier = Modifier.weight(1f))
 
                     OutlinedButton(
                         onClick = onDismiss,

@@ -14,30 +14,85 @@ data class NotificationResponse(
 @Serializable
 data class Notification(
     val id: Int,
-    @SerialName("notification_type") val notificationType: String,
+
+    // Handle both "notification_type" and "type" from backend
+    @SerialName("notification_type")
+    val notificationType: String? = null,
+    @SerialName("type")
+    private val typeAlias: String? = null,
+
     val title: String,
     val message: String,
     val priority: String,
-    @SerialName("is_read") val isRead: Boolean,
-    @SerialName("read_at") val readAt: String?,
-    @SerialName("is_confirmed") val isConfirmed: Boolean,
-    @SerialName("confirmed_at") val confirmedAt: String?,
-    @SerialName("created_at") val createdAt: String,
-    @SerialName("sent_at") val sentAt: String?,
-    @SerialName("last_sent_at") val lastSentAt: String?,
-    @SerialName("send_count") val sendCount: Int,
+
+    @SerialName("is_read")
+    val isRead: Boolean,
+    @SerialName("read_at")
+    val readAt: String? = null,
+
+    @SerialName("is_confirmed")
+    val isConfirmed: Boolean,
+    @SerialName("confirmed_at")
+    val confirmedAt: String? = null,
+
+    @SerialName("created_at")
+    val createdAt: String,
+    @SerialName("sent_at")
+    val sentAt: String? = null,
+    @SerialName("last_sent_at")
+    val lastSentAt: String? = null,
+    @SerialName("send_count")
+    val sendCount: Int? = null,
+
     val data: Map<String, String>? = null,
-    @SerialName("related_project") val relatedProject: Int?,
-    @SerialName("related_maintenance") val relatedMaintenance: Int?,
-    @SerialName("related_product") val relatedProduct: Int?,
-    @SerialName("project_name") val projectName: String?,
-    @SerialName("client_name") val clientName: String?,
-    @SerialName("maintenance_start_date") val maintenanceStartDate: String?,
-    @SerialName("product_name") val productName: String?,
-    @SerialName("product_quantity") val productQuantity: Int?,
-    @SerialName("age_in_seconds") val ageInSeconds: Int,
-    @SerialName("is_urgent") val isUrgent: Boolean,
-    @SerialName("requires_confirmation") val requiresConfirmation: Boolean
+
+    // Project info - can come from different places
+    @SerialName("related_project")
+    val relatedProject: Int? = null,
+    @SerialName("project_name")
+    val projectName: String? = null,
+    @SerialName("client_name")
+    val clientName: String? = null,
+
+    // Or from nested project object
+    val project: ProjectInfo? = null,
+
+    @SerialName("related_maintenance")
+    val relatedMaintenance: Int? = null,
+    @SerialName("maintenance_start_date")
+    val maintenanceStartDate: String? = null,
+
+    @SerialName("related_product")
+    val relatedProduct: Int? = null,
+    @SerialName("product_name")
+    val productName: String? = null,
+    @SerialName("product_quantity")
+    val productQuantity: Int? = null,
+
+    @SerialName("age_in_seconds")
+    val ageInSeconds: Int? = null,
+    @SerialName("is_urgent")
+    val isUrgent: Boolean? = null,
+    @SerialName("requires_confirmation")
+    val requiresConfirmation: Boolean? = null
+) {
+    // Computed property to get the actual notification type
+    val actualNotificationType: String
+        get() = typeAlias ?: notificationType ?: "UNKNOWN"
+
+    // Get project name from either direct field or nested object
+    val actualProjectName: String?
+        get() = projectName ?: project?.name
+
+    // Get client name from either direct field or data map
+    val actualClientName: String?
+        get() = clientName ?: data?.get("client_name")
+}
+
+@Serializable
+data class ProjectInfo(
+    val id: Int,
+    val name: String
 )
 
 @Serializable

@@ -3,11 +3,11 @@ package com.company.employer.data.remote
 import android.util.Log
 import com.company.employer.BuildConfig
 import com.company.employer.data.model.Notification
-
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import okhttp3.*
 import okhttp3.sse.EventSource
@@ -34,7 +34,7 @@ class NotificationSseService(private val accessToken: String) {
     }
 
     fun observeNotifications(): Flow<SseNotificationEvent> = callbackFlow {
-        val url = "${BuildConfig.API_BASE_URL}/api/notifications/stream/?token=$accessToken"
+        val url = "${BuildConfig.API_BASE_URL}api/notifications/stream/?token=$accessToken"
 
         val request = Request.Builder()
             .url(url)
@@ -53,22 +53,31 @@ class NotificationSseService(private val accessToken: String) {
                 data: String
             ) {
                 try {
-                    Log.d("SSE", "Received event: $data")
-                    val eventData = json.decodeFromString<Map<String, kotlinx.serialization.json.JsonElement>>(data)
+                    Log.d("SSE", "Received raw event - type: $type, data: $data")
 
-                    val eventType = eventData["event"]?.toString()?.trim('"') ?: ""
+                    // The backend sends notifications directly as the data
+                    // Each notification is a complete Notification object
+                    when (type) {
+                        "connected" -> {
+                            Log.d("SSE", "Connected to SSE stream")
+                        }
+                        "notification" -> {
+                            // Parse the notification directly
+                            val notification = json.decodeFromString<Notification>(data)
+                            Log.d("SSE", "Parsed notification: ${notification.title}")
 
-                    if (eventType == "notification") {
-                        val notificationData = eventData["data"]?.toString() ?: ""
-                        val notification = json.decodeFromString<Notification>(notificationData)
-
-                        trySend(SseNotificationEvent(
-                            event = eventType,
-                            data = notification
-                        ))
+                            trySend(SseNotificationEvent(
+                                event = "notification",
+                                data = notification
+                            ))
+                        }
+                        else -> {
+                            Log.d("SSE", "Unknown event type: $type")
+                        }
                     }
                 } catch (e: Exception) {
-                    Log.e("SSE", "Error parsing event", e)
+                    Log.e("SSE", "Error parsing event: ${e.message}", e)
+                    Log.e("SSE", "Raw data was: $data")
                 }
             }
 
