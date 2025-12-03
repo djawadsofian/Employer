@@ -34,9 +34,12 @@ class NotificationSseService(private val accessToken: String) {
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
+    // FIXED: More lenient JSON configuration
     private val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
+        coerceInputValues = true
+        explicitNulls = false
     }
 
     fun observeNotifications(): Flow<SseNotificationEvent> = callbackFlow {
@@ -49,7 +52,7 @@ class NotificationSseService(private val accessToken: String) {
 
         val eventSourceListener = object : EventSourceListener() {
             override fun onOpen(eventSource: EventSource, response: Response) {
-                Log.d("SSE", "Connection opened")
+                Log.d("SSE", "✅ Connection opened")
             }
 
             override fun onEvent(
@@ -59,45 +62,49 @@ class NotificationSseService(private val accessToken: String) {
                 data: String
             ) {
                 try {
-                    Log.d("SSE", "Received raw event - type: $type, data: $data")
+                    Log.d("SSE", "📨 Received raw event - type: $type, data: $data")
 
                     // Parse the wrapper which contains the actual event type and notification data
                     val wrapper = json.decodeFromString<SseWrapper>(data)
 
                     when (wrapper.event) {
                         "connected" -> {
-                            Log.d("SSE", "Connected to SSE stream")
+                            Log.d("SSE", "✅ Connected to SSE stream")
                         }
                         "notification" -> {
                             // The notification is in wrapper.data
                             wrapper.data?.let { notification ->
-                                Log.d("SSE", "Parsed notification: ${notification.title}")
+                                Log.d("SSE", "✅ Parsed notification: ${notification.title}")
+                                Log.d("SSE", "   Type: ${notification.actualNotificationType}")
+                                Log.d("SSE", "   Priority: ${notification.priority}")
+
                                 trySend(SseNotificationEvent(
                                     event = "notification",
                                     data = notification
                                 ))
-                            } ?: Log.e("SSE", "Notification event with null data")
+                            } ?: Log.e("SSE", "❌ Notification event with null data")
                         }
                         "ping" -> {
-                            Log.d("SSE", "Received ping at ${wrapper.timestamp}")
+                            Log.d("SSE", "🏓 Received ping at ${wrapper.timestamp}")
                         }
                         else -> {
-                            Log.d("SSE", "Unknown wrapper event type: ${wrapper.event}")
+                            Log.d("SSE", "❓ Unknown wrapper event type: ${wrapper.event}")
                         }
                     }
                 } catch (e: Exception) {
-                    Log.e("SSE", "Error parsing event: ${e.message}", e)
+                    Log.e("SSE", "❌ Error parsing event: ${e.message}", e)
                     Log.e("SSE", "Raw data was: $data")
+                    // Don't close the channel on parsing errors - just skip this notification
                 }
             }
 
             override fun onClosed(eventSource: EventSource) {
-                Log.d("SSE", "Connection closed")
+                Log.d("SSE", "🔌 Connection closed")
                 channel.close()
             }
 
             override fun onFailure(eventSource: EventSource, t: Throwable?, response: Response?) {
-                Log.e("SSE", "Connection failed", t)
+                Log.e("SSE", "❌ Connection failed", t)
                 channel.close(t)
             }
         }
@@ -106,7 +113,7 @@ class NotificationSseService(private val accessToken: String) {
             .newEventSource(request, eventSourceListener)
 
         awaitClose {
-            Log.d("SSE", "Closing event source")
+            Log.d("SSE", "🛑 Closing event source")
             eventSource.cancel()
         }
     }

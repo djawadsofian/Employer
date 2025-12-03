@@ -71,7 +71,7 @@ fun NotificationBadgeButton(
             }
         }
 
-        // Notification List Dialog (instead of DropdownMenu)
+        // Notification List Dialog
         if (state.showNotificationList) {
             NotificationListDialog(
                 notifications = state.notifications,
@@ -104,6 +104,50 @@ fun NotificationBadgeButton(
                         viewModel.onEvent(NotificationBadgeEvent.DismissNotificationDetails)
                     }
                 } else null
+            )
+        }
+    }
+}
+
+@Composable
+fun NotificationIcon(
+    type: String,
+    priority: String,
+    modifier: Modifier = Modifier
+) {
+    // Enhanced icon mapping for ALL notification types
+    val icon = when (type) {
+        "PROJECT_ASSIGNED" -> Icons.Outlined.Assignment
+        "PROJECT_STARTING_SOON" -> Icons.Outlined.Event
+        "PROJECT_MODIFIED" -> Icons.Outlined.Edit
+        "PROJECT_DELETED" -> Icons.Outlined.Delete
+        "MAINTENANCE_STARTING_SOON" -> Icons.Outlined.Build
+        "MAINTENANCE_ADDED" -> Icons.Outlined.AddCircle
+        "MAINTENANCE_MODIFIED" -> Icons.Outlined.Edit
+        "MAINTENANCE_DELETED" -> Icons.Outlined.DeleteOutline
+        "LOW_STOCK_ALERT" -> Icons.Outlined.Warning
+        "OUT_OF_STOCK_ALERT" -> Icons.Outlined.ErrorOutline
+        else -> Icons.Outlined.Notifications
+    }
+
+    val tint = when (priority) {
+        "URGENT" -> MaterialTheme.colorScheme.error
+        "HIGH" -> MaterialTheme.colorScheme.tertiary
+        "MEDIUM" -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(10.dp),
+        color = tint.copy(alpha = 0.15f)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(24.dp)
             )
         }
     }
@@ -169,7 +213,7 @@ fun NotificationListDialog(
 
                 HorizontalDivider()
 
-                // Notification List - Scrollable
+                // Notification List
                 if (notifications.isEmpty()) {
                     EmptyNotificationsList()
                 } else {
@@ -296,49 +340,6 @@ fun NotificationListItem(
 
             HorizontalDivider(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-            )
-        }
-    }
-}
-
-@Composable
-fun NotificationIcon(
-    type: String,
-    priority: String,
-    modifier: Modifier = Modifier
-) {
-    val icon = when (type) {
-        "PROJECT_ASSIGNED" -> Icons.Outlined.Assignment
-        "PROJECT_STARTING_SOON" -> Icons.Outlined.Event
-        "PROJECT_MODIFIED" -> Icons.Outlined.Edit
-        "PROJECT_DELETED" -> Icons.Outlined.Delete
-        "MAINTENANCE_STARTING_SOON" -> Icons.Outlined.Build
-        "MAINTENANCE_ADDED" -> Icons.Outlined.Add
-        "MAINTENANCE_MODIFIED" -> Icons.Outlined.Edit
-        "MAINTENANCE_DELETED" -> Icons.Outlined.Delete
-        "LOW_STOCK_ALERT" -> Icons.Outlined.Warning
-        "OUT_OF_STOCK_ALERT" -> Icons.Outlined.ErrorOutline
-        else -> Icons.Outlined.Notifications
-    }
-
-    val tint = when (priority) {
-        "URGENT" -> MaterialTheme.colorScheme.error
-        "HIGH" -> MaterialTheme.colorScheme.tertiary
-        "MEDIUM" -> MaterialTheme.colorScheme.primary
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
-
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(10.dp),
-        color = tint.copy(alpha = 0.15f)
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = tint,
-                modifier = Modifier.size(24.dp)
             )
         }
     }

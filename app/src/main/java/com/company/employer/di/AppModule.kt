@@ -35,5 +35,7 @@ val appModule = module {
     viewModel { LoginViewModel(get(), get()) }
     viewModel { CalendarViewModel(get(), get()) }
     viewModel { ProfileViewModel(get(), get(), get()) }
-    viewModel { NotificationBadgeViewModel(get(), get()) }
+
+    // IMPORTANT: Pass androidContext() to NotificationBadgeViewModel for sound playback
+    viewModel { NotificationBadgeViewModel(get(), get(), androidContext()) }
 }

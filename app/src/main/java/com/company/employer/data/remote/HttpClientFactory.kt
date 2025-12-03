@@ -29,12 +29,14 @@ object HttpClientFactory {
                 contentType(ContentType.Application.Json)
             }
 
-            // JSON serialization
+            // JSON serialization - FIXED: More lenient configuration
             install(ContentNegotiation) {
                 json(Json {
                     prettyPrint = true
                     isLenient = true
                     ignoreUnknownKeys = true
+                    coerceInputValues = true // Handle null values gracefully
+                    explicitNulls = false // Don't require explicit nulls
                 })
             }
 

@@ -2,6 +2,9 @@ package com.company.employer.data.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 @Serializable
 data class NotificationResponse(
@@ -44,7 +47,8 @@ data class Notification(
     @SerialName("send_count")
     val sendCount: Int? = null,
 
-    val data: Map<String, String>? = null,
+    // FIXED: Use JsonElement to accept any JSON structure (objects, arrays, primitives)
+    val data: JsonElement? = null,
 
     // Project info - can come from different places
     @SerialName("related_project")
@@ -86,7 +90,16 @@ data class Notification(
 
     // Get client name from either direct field or data map
     val actualClientName: String?
-        get() = clientName ?: data?.get("client_name")
+        get() {
+            if (clientName != null) return clientName
+
+            // Try to extract from JsonElement data
+            return try {
+                (data as? JsonObject)?.get("client_name")?.jsonPrimitive?.content
+            } catch (e: Exception) {
+                null
+            }
+        }
 }
 
 @Serializable

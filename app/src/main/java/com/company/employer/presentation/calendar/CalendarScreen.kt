@@ -48,6 +48,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.*
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -57,6 +58,24 @@ fun CalendarScreen(
     notificationBadgeViewModel: NotificationBadgeViewModel = koinViewModel() // Add this
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // Listen to notification refresh trigger
+    LaunchedEffect(Unit) {
+        notificationBadgeViewModel.refreshTrigger.collect {
+            Timber.d("📱 Calendar refresh triggered by new notification")
+            viewModel.refreshCalendar()
+        }
+    }
+
+    // Also listen to state changes that indicate new notifications
+    val notificationState by notificationBadgeViewModel.state.collectAsStateWithLifecycle()
+    LaunchedEffect(notificationState.lastNotificationId) {
+        notificationState.lastNotificationId?.let { notificationId ->
+            Timber.d("📬 New notification detected: #$notificationId - refreshing calendar")
+            viewModel.refreshCalendar()
+        }
+    }
+
+    // Rest of your CalendarScreen implementation stays the same...
     var showFilterSheet by remember { mutableStateOf(false) }
     val hasActiveFilters = state.selectedEventType != EventTypeFilter.ALL || state.selectedWilaya != null
 
@@ -1613,4 +1632,4 @@ fun ErrorMessage(
             }
         }
     }
-} 
+}
