@@ -1,5 +1,6 @@
 package com.company.employer.presentation.calendar
 
+import android.media.RingtoneManager
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -51,6 +52,15 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 
 
+
+
+
+
+
+
+
+
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun CalendarScreen(
@@ -62,11 +72,13 @@ fun CalendarScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     var showFilterSheet by remember { mutableStateOf(false) }
     val hasActiveFilters = state.selectedEventType != EventTypeFilter.ALL || state.selectedWilaya != null
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     // Listen for calendar refresh events from notifications
     LaunchedEffect(Unit) {
         notificationBadgeViewModel.calendarRefreshEvent.collect {
-            timber.log.Timber.d("Refreshing calendar due to notification")
+            Timber.d("🔄 Refreshing calendar due to notification")
             viewModel.onEvent(CalendarUiEvent.Refresh)
         }
     }
@@ -75,16 +87,20 @@ fun CalendarScreen(
     LaunchedEffect(Unit) {
         notificationBadgeViewModel.soundNotificationEvent.collect {
             try {
-                timber.log.Timber.d("Playing notification sound")
-                val notification = android.app.Notification.Builder(context, "default")
-                    .setSmallIcon(android.R.drawable.ic_dialog_info)
-                    .setSound(android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION))
-                    .build()
+                Timber.d("🔊 Attempting to play notification sound")
 
-                val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-                notificationManager.notify(System.currentTimeMillis().toInt(), notification)
+                // Use RingtoneManager to play notification sound
+                val notificationUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                val ringtone = RingtoneManager.getRingtone(context, notificationUri)
+
+                if (ringtone != null) {
+                    ringtone.play()
+                    Timber.d("✅ Notification sound played successfully")
+                } else {
+                    Timber.e("❌ Ringtone is null - could not play sound")
+                }
             } catch (e: Exception) {
-                timber.log.Timber.e(e, "Failed to play notification sound")
+                Timber.e(e, "❌ Failed to play notification sound")
             }
         }
     }
@@ -105,16 +121,32 @@ fun CalendarScreen(
         )
 
         Scaffold(
-
             containerColor = Color.Transparent,
+            snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
             topBar = {
-                com.company.employer.presentation.components.OfflineIndicator()
-                PremiumTopBar(
-                    userName = state.userName,
-                    onFilterClick = { showFilterSheet = true },
-                    hasActiveFilters = hasActiveFilters,
-                    notificationBadgeViewModel = notificationBadgeViewModel // Pass it here
-                )
+                Column {
+                    // Offline indicator at the very top
+                    com.company.employer.presentation.components.OfflineIndicator(
+                        onRetryClick = {
+                            Timber.d("🔄 Retry clicked - refreshing calendar")
+                            viewModel.onEvent(CalendarUiEvent.Refresh)
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    message = "Actualisation...",
+                                    duration = SnackbarDuration.Short
+                                )
+                            }
+                        }
+                    )
+
+                    // Top bar below offline indicator
+                    PremiumTopBar(
+                        userName = state.userName,
+                        onFilterClick = { showFilterSheet = true },
+                        hasActiveFilters = hasActiveFilters,
+                        notificationBadgeViewModel = notificationBadgeViewModel
+                    )
+                }
             }
         ) { padding ->
             // Rest of the screen content remains the same...

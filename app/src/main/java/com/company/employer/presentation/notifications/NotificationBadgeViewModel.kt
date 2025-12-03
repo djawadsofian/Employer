@@ -42,8 +42,9 @@ class NotificationBadgeViewModel(
     // Track if initial load is complete to avoid refresh spam
     private var isInitialLoadComplete = false
 
-    // Debounce calendar refresh events
+    // Calendar refresh event - no debounce, emit immediately
     private val _calendarRefreshEvent = MutableSharedFlow<Unit>(
+        replay = 0,
         extraBufferCapacity = 1,
         onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
     )
@@ -52,8 +53,9 @@ class NotificationBadgeViewModel(
     // Track notification IDs to avoid duplicate sounds
     private val notifiedIds = mutableSetOf<Int>()
 
-    // Debounce sound notifications
+    // Sound notification event - emit immediately, no debounce
     private val _soundNotificationEvent = MutableSharedFlow<Unit>(
+        replay = 0,
         extraBufferCapacity = 1,
         onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
     )
@@ -61,17 +63,11 @@ class NotificationBadgeViewModel(
 
     init {
         startSseConnection()
-        setupDebouncedRefresh()
-    }
-
-    private fun setupDebouncedRefresh() {
+        // Mark initial load as complete after 5 seconds
         viewModelScope.launch {
-            // Debounce calendar refresh by 2 seconds
-            _calendarRefreshEvent
-                .debounce(2000)
-                .collect {
-                    Timber.d("Triggering debounced calendar refresh")
-                }
+            delay(5000)
+            isInitialLoadComplete = true
+            Timber.d("✅ Initial notification load period complete - will now play sounds for new notifications")
         }
     }
 
@@ -80,16 +76,19 @@ class NotificationBadgeViewModel(
             try {
                 val token = tokenManager.getAccessToken().first()
                 if (token != null) {
+                    Timber.d("🔌 Starting SSE connection for notifications")
                     sseService = NotificationSseService(token)
                     sseService?.observeNotifications()?.collect { event ->
                         if (event.event == "notification" && event.data != null) {
-                            Timber.d("New notification received via SSE: ${event.data.title}")
+                            Timber.d("📨 New notification received via SSE: ${event.data.title}")
                             handleNewNotification(event.data)
                         }
                     }
+                } else {
+                    Timber.e("❌ No access token available for SSE")
                 }
             } catch (e: Exception) {
-                Timber.e(e, "SSE connection error")
+                Timber.e(e, "❌ SSE connection error")
             }
         }
     }
@@ -104,9 +103,11 @@ class NotificationBadgeViewModel(
 
         if (existingIndex != -1) {
             // Update existing notification
+            Timber.d("🔄 Updating existing notification ID: ${notification.id}")
             currentNotifications[existingIndex] = notification
         } else {
             // Add new notification to top
+            Timber.d("➕ Adding new notification ID: ${notification.id}")
             currentNotifications.add(0, notification)
         }
 
@@ -116,28 +117,35 @@ class NotificationBadgeViewModel(
 
         // Only trigger refresh and sound for truly new notifications after initial load
         if (isInitialLoadComplete && isNewNotification) {
+            Timber.d("🔔 Processing new notification - initial load complete: $isInitialLoadComplete")
+
             // Check if we haven't already notified for this ID
             if (notifiedIds.add(notification.id)) {
-                // Trigger sound notification (debounced)
+                Timber.d("🔊 Playing sound for notification ID: ${notification.id}")
+
+                // Trigger sound notification immediately
                 viewModelScope.launch {
-                    _soundNotificationEvent.emit(Unit)
+                    val emitResult = _soundNotificationEvent.tryEmit(Unit)
+                    Timber.d("🔊 Sound emission result: $emitResult")
 
                     // Clean up old IDs after 5 minutes to prevent memory leak
                     delay(300_000)
                     notifiedIds.remove(notification.id)
                 }
+            } else {
+                Timber.d("🔇 Skipping sound for notification ID: ${notification.id} (already notified)")
             }
 
-            // Trigger calendar refresh (debounced)
+            // Trigger calendar refresh immediately
             viewModelScope.launch {
-                _calendarRefreshEvent.emit(Unit)
+                val emitResult = _calendarRefreshEvent.tryEmit(Unit)
+                Timber.d("🔄 Calendar refresh emission result: $emitResult")
             }
-        } else if (!isInitialLoadComplete) {
-            // Mark initial load as complete after first batch
-            viewModelScope.launch {
-                delay(3000) // Wait 3 seconds after app start
-                isInitialLoadComplete = true
-                Timber.d("Initial notification load complete")
+        } else {
+            if (!isInitialLoadComplete) {
+                Timber.d("⏳ Skipping sound/refresh - still in initial load period")
+            } else if (!isNewNotification) {
+                Timber.d("🔄 Skipping sound/refresh - notification is an update, not new")
             }
         }
     }
@@ -174,11 +182,14 @@ class NotificationBadgeViewModel(
         viewModelScope.launch {
             val result = notificationRepository.markAsRead(notificationId)
             if (result is Result.Success) {
-                // Remove the notification from the list (backend handles it)
+                Timber.d("✅ Marked notification $notificationId as read")
+                // Remove the notification from the list
                 val updatedNotifications = _state.value.notifications.filter { it.id != notificationId }
                 _state.value = _state.value.copy(
                     notifications = updatedNotifications
                 )
+            } else if (result is Result.Error) {
+                Timber.e("❌ Failed to mark notification as read: ${result.message}")
             }
         }
     }
@@ -187,10 +198,13 @@ class NotificationBadgeViewModel(
         viewModelScope.launch {
             val result = notificationRepository.markAllAsRead()
             if (result is Result.Success) {
-                // Clear all notifications (backend handles it)
+                Timber.d("✅ Marked all notifications as read")
+                // Clear all notifications
                 _state.value = _state.value.copy(
                     notifications = emptyList()
                 )
+            } else if (result is Result.Error) {
+                Timber.e("❌ Failed to mark all as read: ${result.message}")
             }
         }
     }
@@ -199,5 +213,6 @@ class NotificationBadgeViewModel(
         super.onCleared()
         sseService?.close()
         notifiedIds.clear()
+        Timber.d("🧹 NotificationBadgeViewModel cleared")
     }
 }

@@ -500,10 +500,12 @@ fun NotificationDetailsDialog(
                         FilledTonalButton(
                             onClick = markAsReadAction,
                             shape = RoundedCornerShape(12.dp)
+
+
                         ) {
                             Icon(Icons.Default.Check, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Marquer comme lu")
+                            Text("Marquer lu")
                         }
                     } ?: Spacer(modifier = Modifier.weight(1f))
 
