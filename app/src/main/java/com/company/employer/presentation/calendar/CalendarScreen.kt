@@ -50,34 +50,44 @@ import java.util.*
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun CalendarScreen(
-    onNavigateToNotifications: () -> Unit, // This can be removed if not needed
+    onNavigateToNotifications: () -> Unit,
     viewModel: CalendarViewModel = koinViewModel(),
-    notificationBadgeViewModel: NotificationBadgeViewModel = koinViewModel() // Add this
+    notificationBadgeViewModel: NotificationBadgeViewModel = koinViewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    // Listen to notification refresh trigger
-    LaunchedEffect(Unit) {
-        notificationBadgeViewModel.refreshTrigger.collect {
-            Timber.d("📱 Calendar refresh triggered by new notification")
-            viewModel.refreshCalendar()
-        }
-    }
-
-    // Also listen to state changes that indicate new notifications
-    val notificationState by notificationBadgeViewModel.state.collectAsStateWithLifecycle()
-    LaunchedEffect(notificationState.lastNotificationId) {
-        notificationState.lastNotificationId?.let { notificationId ->
-            Timber.d("📬 New notification detected: #$notificationId - refreshing calendar")
-            viewModel.refreshCalendar()
-        }
-    }
-
-    // Rest of your CalendarScreen implementation stays the same...
+    val context = androidx.compose.ui.platform.LocalContext.current
     var showFilterSheet by remember { mutableStateOf(false) }
     val hasActiveFilters = state.selectedEventType != EventTypeFilter.ALL || state.selectedWilaya != null
+
+    // Listen for calendar refresh events from notifications
+    LaunchedEffect(Unit) {
+        notificationBadgeViewModel.calendarRefreshEvent.collect {
+            timber.log.Timber.d("Refreshing calendar due to notification")
+            viewModel.onEvent(CalendarUiEvent.Refresh)
+        }
+    }
+
+    // Listen for sound notification events and play sound
+    LaunchedEffect(Unit) {
+        notificationBadgeViewModel.soundNotificationEvent.collect {
+            try {
+                timber.log.Timber.d("Playing notification sound")
+                val notification = android.app.Notification.Builder(context, "default")
+                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setSound(android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION))
+                    .build()
+
+                val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                notificationManager.notify(System.currentTimeMillis().toInt(), notification)
+            } catch (e: Exception) {
+                timber.log.Timber.e(e, "Failed to play notification sound")
+            }
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Background gradient
@@ -95,8 +105,10 @@ fun CalendarScreen(
         )
 
         Scaffold(
+
             containerColor = Color.Transparent,
             topBar = {
+                com.company.employer.presentation.components.OfflineIndicator()
                 PremiumTopBar(
                     userName = state.userName,
                     onFilterClick = { showFilterSheet = true },

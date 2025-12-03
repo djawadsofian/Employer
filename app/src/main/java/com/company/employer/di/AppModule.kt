@@ -1,5 +1,6 @@
 package com.company.employer.di
 
+import com.company.employer.data.local.CacheManager
 import com.company.employer.data.local.TokenManager
 import com.company.employer.data.remote.ApiService
 import com.company.employer.data.remote.HttpClientFactory
@@ -16,14 +17,15 @@ import org.koin.dsl.module
 val appModule = module {
     // Local
     single { TokenManager(androidContext()) }
+    single { CacheManager(androidContext()) }
 
     // Remote
     single { HttpClientFactory.create(androidContext(), get()) }
     single { ApiService(get()) }
 
-    // Repositories
-    single { AuthRepository(get(), get()) }
-    single { CalendarRepository(get()) }
+    // Repositories - Now with cache manager
+    single { AuthRepository(get(), get(), get()) }
+    single { CalendarRepository(get(), get()) }
     single { NotificationRepository(get()) }
     single { ProfileRepository(get()) }
 
@@ -35,7 +37,5 @@ val appModule = module {
     viewModel { LoginViewModel(get(), get()) }
     viewModel { CalendarViewModel(get(), get()) }
     viewModel { ProfileViewModel(get(), get(), get()) }
-
-    // IMPORTANT: Pass androidContext() to NotificationBadgeViewModel for sound playback
-    viewModel { NotificationBadgeViewModel(get(), get(), androidContext()) }
+    viewModel { NotificationBadgeViewModel(get(), get()) }
 }
