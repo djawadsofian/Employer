@@ -10,6 +10,7 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import timber.log.Timber
 
 private val Context.tokenDataStore: DataStore<Preferences> by preferencesDataStore(name = "token_prefs")
 
@@ -32,9 +33,11 @@ class TokenManager(private val context: Context) {
     }
 
     suspend fun saveAccessToken(accessToken: String) {
+
         dataStore.edit { prefs ->
             prefs[ACCESS_TOKEN_KEY] = encryptToken(accessToken)
         }
+        Timber.d("💾 [Token Save] Saving new access token (first 10 chars): ${accessToken.take(10)}...")
     }
 
     suspend fun saveUsername(username: String) {

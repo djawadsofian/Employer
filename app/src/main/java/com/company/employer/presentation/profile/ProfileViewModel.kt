@@ -15,6 +15,7 @@ data class ProfileState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val showChangePasswordDialog: Boolean = false,
+    val showLogoutDialog: Boolean = false, // NEW
     val currentPassword: String = "",
     val newPassword: String = "",
     val confirmPassword: String = "",
@@ -30,7 +31,9 @@ sealed class ProfileEvent {
     data class NewPasswordChanged(val password: String) : ProfileEvent()
     data class ConfirmPasswordChanged(val password: String) : ProfileEvent()
     data object ChangePassword : ProfileEvent()
-    data object Logout : ProfileEvent()
+    data object ShowLogoutDialog : ProfileEvent() // NEW
+    data object DismissLogoutDialog : ProfileEvent() // NEW
+    data object ConfirmLogout : ProfileEvent() // NEW - replaces old Logout
 }
 
 class ProfileViewModel(
@@ -91,7 +94,13 @@ class ProfileViewModel(
                 )
             }
             is ProfileEvent.ChangePassword -> changePassword()
-            is ProfileEvent.Logout -> logout()
+            is ProfileEvent.ShowLogoutDialog -> {
+                _state.value = _state.value.copy(showLogoutDialog = true)
+            }
+            is ProfileEvent.DismissLogoutDialog -> {
+                _state.value = _state.value.copy(showLogoutDialog = false)
+            }
+            is ProfileEvent.ConfirmLogout -> logout()
         }
     }
 
@@ -179,7 +188,7 @@ class ProfileViewModel(
                         _state.value = _state.value.copy(
                             isLoading = false,
                             passwordChangeSuccess = false,
-                            passwordChangeError = result.message
+                            passwordChangeError = result.message // This now shows the backend message
                         )
                     }
                 }
@@ -190,6 +199,7 @@ class ProfileViewModel(
     private fun logout() {
         viewModelScope.launch {
             Timber.d("🚪 Logging out...")
+            _state.value = _state.value.copy(showLogoutDialog = false)
             authRepository.logout()
             _logoutEvent.emit(Unit)
         }

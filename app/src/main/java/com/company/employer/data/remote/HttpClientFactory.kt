@@ -68,6 +68,7 @@ object HttpClientFactory {
 
                                         if (accessToken != null) {
                                             tokenManager.saveAccessToken(accessToken)
+
                                             BearerTokens(accessToken = accessToken, refreshToken = refreshToken)
                                         } else null
                                     } else null

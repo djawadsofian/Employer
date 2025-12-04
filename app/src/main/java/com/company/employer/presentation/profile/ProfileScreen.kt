@@ -359,12 +359,54 @@ fun ProfileContent(
                     title = "Se déconnecter",
                     subtitle = "Quitter votre session",
                     iconColor = MaterialTheme.colorScheme.error,
-                    onClick = { onEvent(ProfileEvent.Logout) }
+                    onClick = { onEvent(ProfileEvent.ShowLogoutDialog) }
                 )
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        if (state.showLogoutDialog) {
+            AlertDialog(
+                onDismissRequest = { onEvent(ProfileEvent.DismissLogoutDialog) },
+                icon = {
+                    Icon(
+                        Icons.Outlined.Logout,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(32.dp)
+                    )
+                },
+                title = {
+                    Text(
+                        text = "Se déconnecter ?",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Text(
+                        text = "Êtes-vous sûr de vouloir vous déconnecter de votre compte ?",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = { onEvent(ProfileEvent.ConfirmLogout) },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text("Se déconnecter")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { onEvent(ProfileEvent.DismissLogoutDialog) }) {
+                        Text("Annuler")
+                    }
+                }
+            )
+        }
     }
 }
 
