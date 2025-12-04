@@ -8,16 +8,12 @@ import com.company.employer.data.repository.ProfileRepository
 import com.company.employer.domain.util.Result
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 data class ProfileState(
     val user: User? = null,
     val isLoading: Boolean = false,
     val error: String? = null,
-    val isEditing: Boolean = false,
-    val editEmail: String = "",
-    val editFirstName: String = "",
-    val editLastName: String = "",
-    val editPhoneNumber: String = "",
     val showChangePasswordDialog: Boolean = false,
     val currentPassword: String = "",
     val newPassword: String = "",
@@ -28,13 +24,6 @@ data class ProfileState(
 
 sealed class ProfileEvent {
     data object LoadProfile : ProfileEvent()
-    data object StartEditing : ProfileEvent()
-    data object CancelEditing : ProfileEvent()
-    data class EmailChanged(val email: String) : ProfileEvent()
-    data class FirstNameChanged(val firstName: String) : ProfileEvent()
-    data class LastNameChanged(val lastName: String) : ProfileEvent()
-    data class PhoneNumberChanged(val phoneNumber: String) : ProfileEvent()
-    data object SaveProfile : ProfileEvent()
     data object ShowChangePasswordDialog : ProfileEvent()
     data object DismissChangePasswordDialog : ProfileEvent()
     data class CurrentPasswordChanged(val password: String) : ProfileEvent()
@@ -63,44 +52,43 @@ class ProfileViewModel(
     fun onEvent(event: ProfileEvent) {
         when (event) {
             is ProfileEvent.LoadProfile -> loadProfile()
-            is ProfileEvent.StartEditing -> startEditing()
-            is ProfileEvent.CancelEditing -> cancelEditing()
-            is ProfileEvent.EmailChanged -> {
-                _state.value = _state.value.copy(editEmail = event.email)
-            }
-            is ProfileEvent.FirstNameChanged -> {
-                _state.value = _state.value.copy(editFirstName = event.firstName)
-            }
-            is ProfileEvent.LastNameChanged -> {
-                _state.value = _state.value.copy(editLastName = event.lastName)
-            }
-            is ProfileEvent.PhoneNumberChanged -> {
-                _state.value = _state.value.copy(editPhoneNumber = event.phoneNumber)
-            }
-            is ProfileEvent.SaveProfile -> saveProfile()
             is ProfileEvent.ShowChangePasswordDialog -> {
                 _state.value = _state.value.copy(
                     showChangePasswordDialog = true,
                     currentPassword = "",
                     newPassword = "",
                     confirmPassword = "",
-                    passwordChangeError = null
+                    passwordChangeError = null,
+                    passwordChangeSuccess = false
                 )
             }
             is ProfileEvent.DismissChangePasswordDialog -> {
                 _state.value = _state.value.copy(
                     showChangePasswordDialog = false,
-                    passwordChangeSuccess = false
+                    passwordChangeSuccess = false,
+                    passwordChangeError = null,
+                    currentPassword = "",
+                    newPassword = "",
+                    confirmPassword = ""
                 )
             }
             is ProfileEvent.CurrentPasswordChanged -> {
-                _state.value = _state.value.copy(currentPassword = event.password)
+                _state.value = _state.value.copy(
+                    currentPassword = event.password,
+                    passwordChangeError = null
+                )
             }
             is ProfileEvent.NewPasswordChanged -> {
-                _state.value = _state.value.copy(newPassword = event.password)
+                _state.value = _state.value.copy(
+                    newPassword = event.password,
+                    passwordChangeError = null
+                )
             }
             is ProfileEvent.ConfirmPasswordChanged -> {
-                _state.value = _state.value.copy(confirmPassword = event.password)
+                _state.value = _state.value.copy(
+                    confirmPassword = event.password,
+                    passwordChangeError = null
+                )
             }
             is ProfileEvent.ChangePassword -> changePassword()
             is ProfileEvent.Logout -> logout()
@@ -115,65 +103,16 @@ class ProfileViewModel(
                         _state.value = _state.value.copy(isLoading = true, error = null)
                     }
                     is Result.Success -> {
+                        Timber.d("✅ Profile loaded successfully")
                         _state.value = _state.value.copy(
                             isLoading = false,
                             user = result.data,
-                            editEmail = result.data.email,
-                            editFirstName = result.data.firstName,
-                            editLastName = result.data.lastName,
-                            editPhoneNumber = result.data.phoneNumber ?: "",
                             error = null
                         )
                     }
                     is Result.Error -> {
+                        Timber.e("❌ Failed to load profile: ${result.message}")
                         _state.value = _state.value.copy(
-                            isLoading = false,
-                            error = result.message
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    private fun startEditing() {
-        val user = _state.value.user ?: return
-        _state.value = _state.value.copy(
-            isEditing = true,
-            editEmail = user.email,
-            editFirstName = user.firstName,
-            editLastName = user.lastName,
-            editPhoneNumber = user.phoneNumber ?: ""
-        )
-    }
-
-    private fun cancelEditing() {
-        _state.value = _state.value.copy(isEditing = false)
-    }
-
-    private fun saveProfile() {
-        val currentState = _state.value
-        viewModelScope.launch {
-            profileRepository.updateProfile(
-                email = currentState.editEmail,
-                firstName = currentState.editFirstName,
-                lastName = currentState.editLastName,
-                phoneNumber = currentState.editPhoneNumber
-            ).collect { result ->
-                when (result) {
-                    is Result.Loading -> {
-                        _state.value = currentState.copy(isLoading = true, error = null)
-                    }
-                    is Result.Success -> {
-                        _state.value = currentState.copy(
-                            isLoading = false,
-                            user = result.data,
-                            isEditing = false,
-                            error = null
-                        )
-                    }
-                    is Result.Error -> {
-                        _state.value = currentState.copy(
                             isLoading = false,
                             error = result.message
                         )
@@ -186,19 +125,28 @@ class ProfileViewModel(
     private fun changePassword() {
         val currentState = _state.value
 
+        // Client-side validation
         if (currentState.newPassword.length < 6) {
             _state.value = currentState.copy(
-                passwordChangeError = "Le mot de passe doit contenir au moins 6 caractères"
+                passwordChangeError = "Le mot de passe doit contenir au moins 6 caractères",
+                passwordChangeSuccess = false
             )
             return
         }
 
         if (currentState.newPassword != currentState.confirmPassword) {
             _state.value = currentState.copy(
-                passwordChangeError = "Les mots de passe ne correspondent pas"
+                passwordChangeError = "Les mots de passe ne correspondent pas",
+                passwordChangeSuccess = false
             )
             return
         }
+
+        // Reset states before starting
+        _state.value = currentState.copy(
+            passwordChangeError = null,
+            passwordChangeSuccess = false
+        )
 
         viewModelScope.launch {
             profileRepository.changePassword(
@@ -207,18 +155,30 @@ class ProfileViewModel(
             ).collect { result ->
                 when (result) {
                     is Result.Loading -> {
-                        _state.value = currentState.copy(isLoading = true)
+                        Timber.d("🔄 Changing password...")
+                        _state.value = _state.value.copy(
+                            isLoading = true,
+                            passwordChangeError = null,
+                            passwordChangeSuccess = false
+                        )
                     }
                     is Result.Success -> {
-                        _state.value = currentState.copy(
+                        Timber.d("✅ Password changed successfully")
+                        _state.value = _state.value.copy(
                             isLoading = false,
                             passwordChangeSuccess = true,
-                            passwordChangeError = null
+                            passwordChangeError = null,
+                            currentPassword = "",
+                            newPassword = "",
+                            confirmPassword = ""
                         )
                     }
                     is Result.Error -> {
-                        _state.value = currentState.copy(
+                        // Display the exact error message from backend
+                        Timber.e("❌ Password change failed: ${result.message}")
+                        _state.value = _state.value.copy(
                             isLoading = false,
+                            passwordChangeSuccess = false,
                             passwordChangeError = result.message
                         )
                     }
@@ -229,6 +189,7 @@ class ProfileViewModel(
 
     private fun logout() {
         viewModelScope.launch {
+            Timber.d("🚪 Logging out...")
             authRepository.logout()
             _logoutEvent.emit(Unit)
         }
