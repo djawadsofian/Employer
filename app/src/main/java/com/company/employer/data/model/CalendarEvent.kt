@@ -23,6 +23,7 @@ data class CalendarEvent(
     @SerialName("project_name") val projectName: String,
     @SerialName("client_name") val clientName: String,
     @SerialName("client_address") val clientAddress: ClientAddress,
+    val team: List<String> = emptyList(),
     val status: String? = null,
     @SerialName("is_verified") val isVerified: Boolean? = null,
     @SerialName("start_date") val startDate: String? = null,
