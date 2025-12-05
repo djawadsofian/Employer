@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
+import timber.log.Timber
 
 sealed class Screen(val route: String) {
     data object Login : Screen("login")
@@ -51,14 +52,25 @@ fun AppNavigation() {
 
     LaunchedEffect(Unit) {
         scope.launch {
+            Timber.d("🔑 [Refresh Token] Checking authentication status on app start")
             val token = tokenManager.getAccessToken().first()
+            Timber.d("🔑 [Refresh Token] Initial auth check - Access token exists: ${token != null}")
+
+            if (token != null) {
+                Timber.d("🔑 [Refresh Token] User is logged in with token (first 10 chars): ${token.take(10)}...")
+                // Also check refresh token
+                val refreshToken = tokenManager.getRefreshToken().first()
+                Timber.d("🔑 [Refresh Token] Refresh token exists: ${refreshToken != null}")
+            } else {
+                Timber.d("🔑 [Refresh Token] No access token found - user needs to login")
+            }
+
             isLoggedIn = token != null
             isCheckingAuth = false
         }
     }
 
     if (isCheckingAuth) {
-        // Show splash or loading
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
             CircularProgressIndicator()
         }
@@ -70,6 +82,7 @@ fun AppNavigation() {
             composable(Screen.Login.route) {
                 LoginScreen(
                     onNavigateToHome = {
+                        Timber.d("🔑 [Refresh Token] Login successful, navigating to home")
                         navController.navigate(Screen.Calendar.route) {
                             popUpTo(Screen.Login.route) { inclusive = true }
                         }
@@ -83,7 +96,9 @@ fun AppNavigation() {
                         navController.navigate(Screen.Notifications.route)
                     },
                     onLogout = {
+                        Timber.d("🔑 [Refresh Token] Logging out from calendar screen")
                         scope.launch {
+                            Timber.d("🔑 [Refresh Token] Clearing tokens and navigating to login")
                             tokenManager.clearTokens()
                             navController.navigate(Screen.Login.route) {
                                 popUpTo(0) { inclusive = true }
@@ -97,7 +112,9 @@ fun AppNavigation() {
                 ProfileScreen(
                     onNavigateBack = { navController.popBackStack() },
                     onLogout = {
+                        Timber.d("🔑 [Refresh Token] Logging out from profile screen")
                         scope.launch {
+                            Timber.d("🔑 [Refresh Token] Clearing tokens and navigating to login")
                             tokenManager.clearTokens()
                             navController.navigate(Screen.Login.route) {
                                 popUpTo(0) { inclusive = true }

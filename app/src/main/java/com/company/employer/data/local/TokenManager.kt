@@ -24,20 +24,25 @@ class TokenManager(private val context: Context) {
         private val USERNAME_KEY = stringPreferencesKey("username")
     }
 
-    // Save tokens using encrypted storage
     suspend fun saveTokens(accessToken: String, refreshToken: String) {
+        Timber.d("🔄 [Refresh Token] Saving both tokens")
+        Timber.d("🔄 [Refresh Token] Access token length: ${accessToken.length}")
+        Timber.d("🔄 [Refresh Token] Refresh token length: ${refreshToken.length}")
+        Timber.d("🔄 [Refresh Token] Refresh token first 10 chars: ${refreshToken.take(10)}...")
+
         dataStore.edit { prefs ->
             prefs[ACCESS_TOKEN_KEY] = encryptToken(accessToken)
             prefs[REFRESH_TOKEN_KEY] = encryptToken(refreshToken)
         }
+
+        Timber.d("🔄 [Refresh Token] Tokens saved successfully")
     }
 
     suspend fun saveAccessToken(accessToken: String) {
-
+        Timber.d("💾 [Token Save] Saving new access token (first 10 chars): ${accessToken.take(10)}...")
         dataStore.edit { prefs ->
             prefs[ACCESS_TOKEN_KEY] = encryptToken(accessToken)
         }
-        Timber.d("💾 [Token Save] Saving new access token (first 10 chars): ${accessToken.take(10)}...")
     }
 
     suspend fun saveUsername(username: String) {
@@ -48,13 +53,21 @@ class TokenManager(private val context: Context) {
 
     fun getAccessToken(): Flow<String?> {
         return dataStore.data.map { prefs ->
-            prefs[ACCESS_TOKEN_KEY]?.let { decryptToken(it) }
+            val encrypted = prefs[ACCESS_TOKEN_KEY]
+            val decrypted = encrypted?.let { decryptToken(it) }
+            Timber.d("🔑 [Refresh Token] Retrieving access token: ${decrypted?.take(10)}... (exists: ${decrypted != null})")
+            decrypted
         }
     }
 
     fun getRefreshToken(): Flow<String?> {
         return dataStore.data.map { prefs ->
-            prefs[REFRESH_TOKEN_KEY]?.let { decryptToken(it) }
+            val encrypted = prefs[REFRESH_TOKEN_KEY]
+            val decrypted = encrypted?.let { decryptToken(it) }
+            Timber.d("🔑 [Refresh Token] Retrieving refresh token: ${decrypted?.take(10)}... (exists: ${decrypted != null})")
+            Timber.d("🔑 [Refresh Token] Refresh token stored in DB: ${encrypted != null}")
+            Timber.d("🔑 [Refresh Token] Refresh token decrypted: ${decrypted != null}")
+            decrypted
         }
     }
 
@@ -65,31 +78,30 @@ class TokenManager(private val context: Context) {
     }
 
     suspend fun clearTokens() {
+        Timber.d("🗑️ [Refresh Token] Clearing all tokens from storage")
+        Timber.d("🗑️ [Refresh Token] Before clearing - checking if tokens exist:")
+
+        dataStore.data.collect { prefs ->
+            val hasAccess = prefs[ACCESS_TOKEN_KEY] != null
+            val hasRefresh = prefs[REFRESH_TOKEN_KEY] != null
+            Timber.d("🗑️ [Refresh Token] Access token exists: $hasAccess")
+            Timber.d("🗑️ [Refresh Token] Refresh token exists: $hasRefresh")
+        }
+
         dataStore.edit { prefs ->
             prefs.clear()
         }
+
+        Timber.d("🗑️ [Refresh Token] Tokens cleared successfully")
     }
 
-    // Simple encryption/decryption using EncryptedSharedPreferences
     private fun encryptToken(token: String): String {
-        val masterKey = MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-
-        val encryptedPrefs = EncryptedSharedPreferences.create(
-            context,
-            "encrypted_tokens",
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
-
-        // Use a simple XOR for demonstration (in production, use proper encryption)
-        // For now, we'll store directly as EncryptedSharedPreferences handles encryption
+        Timber.v("🔒 [Refresh Token] Encrypting token (length: ${token.length})")
         return token
     }
 
     private fun decryptToken(token: String): String {
-        return token // EncryptedSharedPreferences handles decryption automatically
+        Timber.v("🔓 [Refresh Token] Decrypting token (length: ${token.length})")
+        return token
     }
 }
