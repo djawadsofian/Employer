@@ -6,9 +6,8 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import timber.log.Timber
 
@@ -81,11 +80,15 @@ class TokenManager(private val context: Context) {
         Timber.d("🗑️ [Refresh Token] Clearing all tokens from storage")
         Timber.d("🗑️ [Refresh Token] Before clearing - checking if tokens exist:")
 
-        dataStore.data.collect { prefs ->
+        // FIX: Use first() instead of collect to avoid blocking
+        try {
+            val prefs = dataStore.data.first()
             val hasAccess = prefs[ACCESS_TOKEN_KEY] != null
             val hasRefresh = prefs[REFRESH_TOKEN_KEY] != null
             Timber.d("🗑️ [Refresh Token] Access token exists: $hasAccess")
             Timber.d("🗑️ [Refresh Token] Refresh token exists: $hasRefresh")
+        } catch (e: Exception) {
+            Timber.e(e, "🗑️ [Refresh Token] Error checking token existence")
         }
 
         dataStore.edit { prefs ->

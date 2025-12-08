@@ -34,7 +34,7 @@ val appModule = module {
     single { GetCalendarEventsUseCase(get()) }
 
     // ViewModels
-    viewModel { LoginViewModel(get(), get()) }
+    viewModel { LoginViewModel(get(), get(), get(), androidContext()) }
     viewModel { CalendarViewModel(get(), get()) }
     viewModel { ProfileViewModel(get(), get(), get()) }
     viewModel { NotificationBadgeViewModel(get(), get()) }

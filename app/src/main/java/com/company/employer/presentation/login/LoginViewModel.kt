@@ -1,12 +1,16 @@
 package com.company.employer.presentation.login
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.company.employer.data.remote.ApiService
 import com.company.employer.data.repository.AuthRepository
 import com.company.employer.domain.usecase.LoginUseCase
 import com.company.employer.domain.util.Result
+import com.company.employer.fcm.FCMHelper
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 data class LoginState(
     val username: String = "",
@@ -25,7 +29,9 @@ sealed class LoginEvent {
 
 class LoginViewModel(
     private val loginUseCase: LoginUseCase,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val apiService: ApiService,  // Add this
+    private val context: Context  // Add this
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(LoginState())
@@ -67,6 +73,9 @@ class LoginViewModel(
                             isSuccess = true,
                             error = null
                         )
+
+                        // ✨ NEW: Send FCM token to backend after successful login
+                        sendFCMTokenToBackend()
                     }
                     is Result.Error -> {
                         _state.value = currentState.copy(
@@ -77,5 +86,34 @@ class LoginViewModel(
                 }
             }
         }
+    }
+
+    private fun sendFCMTokenToBackend() {
+        viewModelScope.launch {
+            try {
+                val fcmToken = FCMHelper.getSavedToken(context)
+                if (fcmToken != null) {
+                    val deviceId = getDeviceId()
+                    val success = apiService.registerFCMToken(fcmToken, deviceId)
+
+                    if (success) {
+                        Timber.d("✅ FCM token sent to backend")
+                    } else {
+                        Timber.w("⚠️ Failed to send FCM token to backend")
+                    }
+                } else {
+                    Timber.w("⚠️ No FCM token available")
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "❌ Error sending FCM token")
+            }
+        }
+    }
+
+    private fun getDeviceId(): String {
+        return android.provider.Settings.Secure.getString(
+            context.contentResolver,
+            android.provider.Settings.Secure.ANDROID_ID
+        )
     }
 }

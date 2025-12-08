@@ -40,11 +40,15 @@ fun ProfileScreen(
     viewModel: ProfileViewModel = koinViewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val shouldLogout by viewModel.shouldLogout.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
-        viewModel.logoutEvent.collect {
+    // Watch for logout trigger - using StateFlow for more reliable observation
+    LaunchedEffect(shouldLogout) {
+        if (shouldLogout) {
+            Timber.d("🚪 [ProfileScreen] shouldLogout is true, calling onLogout()")
+            viewModel.resetLogoutFlag() // Reset the flag
             onLogout()
         }
     }

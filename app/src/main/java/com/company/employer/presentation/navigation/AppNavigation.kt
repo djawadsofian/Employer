@@ -32,7 +32,6 @@ import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import timber.log.Timber
 
@@ -54,60 +53,45 @@ fun AppNavigation() {
     val tokenManager: TokenManager = koinInject()
 
     var startDestination by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
-        Timber.d("🔑 [Refresh Token] Checking authentication status on app start")
+        Timber.d("🔑 [Auth] Checking authentication status on app start")
 
         val accessToken = tokenManager.getAccessToken().first()
         val refreshToken = tokenManager.getRefreshToken().first()
 
         if (accessToken == null || refreshToken == null) {
-            Timber.d("🔑 [Refresh Token] No tokens found - user needs to login")
-            Timber.d("🔑 [Refresh Token] Setting startDestination to Login")
+            Timber.d("🔑 [Auth] No tokens found - showing login")
             startDestination = Screen.Login.route
-            Timber.d("🔑 [Refresh Token] startDestination is now: $startDestination")
             return@LaunchedEffect
         }
 
-        Timber.d("🔑 [Refresh Token] Tokens found - validating with backend")
+        Timber.d("🔑 [Auth] Tokens found - validating with backend")
 
-        // Validate tokens by making a test API call
-        val isValid = validateTokens(accessToken, refreshToken)
+        // Try to validate tokens, but allow offline mode
+        val isValid = validateTokensWithOfflineSupport(refreshToken)
 
-        if (!isValid) {
-            Timber.d("🔑 [Refresh Token] Tokens invalid/expired - clearing and showing login")
-            Timber.d("🔑 [Refresh Token] About to clear tokens...")
-
-            // Launch token clearing in a separate job - don't wait for it
-            launch {
+        if (isValid == false) {
+            // Only redirect to login if validation explicitly failed (not if offline)
+            Timber.d("🔑 [Auth] Tokens invalid - clearing and showing login")
+            scope.launch {
                 tokenManager.clearTokens()
-                Timber.d("🔑 [Refresh Token] Tokens cleared successfully")
             }
-
-            // Immediately set destination without waiting
-            Timber.d("🔑 [Refresh Token] Setting startDestination to Login")
             startDestination = Screen.Login.route
-            Timber.d("🔑 [Refresh Token] startDestination is now: ${startDestination}")
-            Timber.d("🔑 [Refresh Token] Exiting LaunchedEffect with destination: ${startDestination}")
         } else {
-            Timber.d("🔑 [Refresh Token] Tokens valid - user is logged in")
-            Timber.d("🔑 [Refresh Token] Setting startDestination to Calendar")
+            // Either valid or offline - allow user to proceed
+            Timber.d("🔑 [Auth] Tokens valid or offline - proceeding to calendar")
             startDestination = Screen.Calendar.route
-            Timber.d("🔑 [Refresh Token] startDestination is now: $startDestination")
         }
     }
 
-    // Force recomposition when startDestination changes
     key(startDestination) {
-        Timber.d("🔑 [Refresh Token] Current startDestination value: $startDestination")
-
         if (startDestination == null) {
-            Timber.d("🔑 [Refresh Token] Showing loading indicator")
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
                 CircularProgressIndicator()
             }
         } else {
-            Timber.d("🔑 [Refresh Token] Showing NavHost with destination: $startDestination")
             NavHost(
                 navController = navController,
                 startDestination = startDestination!!
@@ -115,7 +99,7 @@ fun AppNavigation() {
                 composable(Screen.Login.route) {
                     LoginScreen(
                         onNavigateToHome = {
-                            Timber.d("🔑 [Refresh Token] Login successful, navigating to home")
+                            Timber.d("🔑 [Auth] Login successful, navigating to calendar")
                             navController.navigate(Screen.Calendar.route) {
                                 popUpTo(Screen.Login.route) { inclusive = true }
                             }
@@ -124,34 +108,26 @@ fun AppNavigation() {
                 }
 
                 composable(Screen.Calendar.route) {
-                    val scope = rememberCoroutineScope()
                     MainScreen(
                         onNavigateToNotifications = {
                             navController.navigate(Screen.Notifications.route)
                         },
                         onLogout = {
-                            Timber.d("🔑 [Refresh Token] Logging out from calendar screen")
-                            scope.launch {
-                                tokenManager.clearTokens()
-                                navController.navigate(Screen.Login.route) {
-                                    popUpTo(0) { inclusive = true }
-                                }
+                            Timber.d("🔑 [Auth] Logout requested from calendar")
+                            navController.navigate(Screen.Login.route) {
+                                popUpTo(0) { inclusive = true }
                             }
                         }
                     )
                 }
 
                 composable(Screen.Profile.route) {
-                    val scope = rememberCoroutineScope()
                     ProfileScreen(
                         onNavigateBack = { navController.popBackStack() },
                         onLogout = {
-                            Timber.d("🔑 [Refresh Token] Logging out from profile screen")
-                            scope.launch {
-                                tokenManager.clearTokens()
-                                navController.navigate(Screen.Login.route) {
-                                    popUpTo(0) { inclusive = true }
-                                }
+                            Timber.d("🔑 [Auth] Logout requested from profile")
+                            navController.navigate(Screen.Login.route) {
+                                popUpTo(0) { inclusive = true }
                             }
                         }
                     )
@@ -161,8 +137,14 @@ fun AppNavigation() {
     }
 }
 
-// Simple token validation function
-private suspend fun validateTokens(accessToken: String, refreshToken: String): Boolean {
+/**
+ * Validates tokens with offline support
+ * Returns:
+ * - true: tokens are valid
+ * - false: tokens are explicitly invalid (should logout)
+ * - null: offline/network error (allow cached access)
+ */
+private suspend fun validateTokensWithOfflineSupport(refreshToken: String): Boolean? {
     return try {
         val client = HttpClient(Android) {
             expectSuccess = false
@@ -173,9 +155,15 @@ private suspend fun validateTokens(accessToken: String, refreshToken: String): B
                     isLenient = true
                 })
             }
+
+            // Set timeout for faster offline detection
+            install(io.ktor.client.plugins.HttpTimeout) {
+                requestTimeoutMillis = 5000
+                connectTimeoutMillis = 5000
+                socketTimeoutMillis = 5000
+            }
         }
 
-        // Try to refresh the token to check if refresh token is valid
         val response = client.post("${BuildConfig.API_BASE_URL}api/jwt/refresh/") {
             contentType(ContentType.Application.Json)
             setBody(mapOf("refresh" to refreshToken))
@@ -183,12 +171,24 @@ private suspend fun validateTokens(accessToken: String, refreshToken: String): B
 
         client.close()
 
-        val isValid = response.status == HttpStatusCode.OK
-        Timber.d("🔑 [Token Validation] Result: ${if (isValid) "VALID" else "INVALID"} (${response.status})")
-        isValid
+        when (response.status) {
+            HttpStatusCode.OK -> {
+                Timber.d("🔑 [Token Validation] Valid")
+                true
+            }
+            HttpStatusCode.Unauthorized -> {
+                Timber.d("🔑 [Token Validation] Invalid (401)")
+                false
+            }
+            else -> {
+                Timber.d("🔑 [Token Validation] Unexpected status: ${response.status}")
+                false
+            }
+        }
     } catch (e: Exception) {
-        Timber.e(e, "🔑 [Token Validation] Exception during validation")
-        false
+        // Network errors - allow offline mode
+        Timber.w("🔑 [Token Validation] Network error (allowing offline): ${e.message}")
+        null
     }
 }
 
@@ -198,14 +198,32 @@ fun MainScreen(
     onLogout: () -> Unit
 ) {
     val navController = rememberNavController()
+    val tokenManager: TokenManager = koinInject()
+    val scope = rememberCoroutineScope()
+
+    // Handle logout properly - simplified version
+    val handleLogout: () -> Unit = {
+        Timber.d("🚪 [MainScreen] handleLogout called")
+        scope.launch {
+            try {
+                Timber.d("🚪 [MainScreen] Clearing tokens...")
+                tokenManager.clearTokens()
+                Timber.d("🚪 [MainScreen] Tokens cleared, calling onLogout()")
+                onLogout()
+            } catch (e: Exception) {
+                Timber.e(e, "🚪 [MainScreen] Error clearing tokens")
+                // Still logout even if clearing fails
+                onLogout()
+            }
+        }
+    }
 
     Scaffold(
         bottomBar = {
-            // Taller navigation bar like calendar
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(80.dp), // Increased height
+                    .height(80.dp),
                 tonalElevation = 3.dp,
                 shadowElevation = 8.dp,
                 color = MaterialTheme.colorScheme.surface
@@ -227,7 +245,7 @@ fun MainScreen(
                                 Icon(
                                     screen.icon,
                                     contentDescription = screen.title,
-                                    modifier = Modifier.size(28.dp) // Slightly larger icons
+                                    modifier = Modifier.size(28.dp)
                                 )
                             },
                             label = {
@@ -264,7 +282,7 @@ fun MainScreen(
             composable(BottomNavScreen.Profile.route) {
                 ProfileScreen(
                     onNavigateBack = { navController.popBackStack() },
-                    onLogout = onLogout
+                    onLogout = handleLogout
                 )
             }
         }

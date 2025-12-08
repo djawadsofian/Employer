@@ -8,6 +8,7 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import timber.log.Timber
 
 @Serializable
 data class ErrorResponse(
@@ -142,6 +143,25 @@ class ApiService(private val client: HttpClient) {
             }
 
             throw Exception(errorMessage)
+        }
+    }
+
+
+    suspend fun registerFCMToken(token: String, deviceId: String? = null): Boolean {
+        return try {
+            val response: HttpResponse = client.post("/api/fcm/devices/") {
+                contentType(ContentType.Application.Json)
+                setBody(mapOf(
+                    "registration_id" to token,
+                    "device_id" to deviceId,
+                    "device_type" to "android"
+                ))
+            }
+
+            response.status.isSuccess()
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to register FCM token")
+            false
         }
     }
 }

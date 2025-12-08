@@ -15,7 +15,7 @@ data class ProfileState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val showChangePasswordDialog: Boolean = false,
-    val showLogoutDialog: Boolean = false, // NEW
+    val showLogoutDialog: Boolean = false,
     val currentPassword: String = "",
     val newPassword: String = "",
     val confirmPassword: String = "",
@@ -31,9 +31,9 @@ sealed class ProfileEvent {
     data class NewPasswordChanged(val password: String) : ProfileEvent()
     data class ConfirmPasswordChanged(val password: String) : ProfileEvent()
     data object ChangePassword : ProfileEvent()
-    data object ShowLogoutDialog : ProfileEvent() // NEW
-    data object DismissLogoutDialog : ProfileEvent() // NEW
-    data object ConfirmLogout : ProfileEvent() // NEW - replaces old Logout
+    data object ShowLogoutDialog : ProfileEvent()
+    data object DismissLogoutDialog : ProfileEvent()
+    data object ConfirmLogout : ProfileEvent()
 }
 
 class ProfileViewModel(
@@ -45,8 +45,9 @@ class ProfileViewModel(
     private val _state = MutableStateFlow(ProfileState())
     val state: StateFlow<ProfileState> = _state.asStateFlow()
 
-    private val _logoutEvent = MutableSharedFlow<Unit>()
-    val logoutEvent: SharedFlow<Unit> = _logoutEvent.asSharedFlow()
+    // Use StateFlow instead of SharedFlow for more reliable logout triggering
+    private val _shouldLogout = MutableStateFlow(false)
+    val shouldLogout: StateFlow<Boolean> = _shouldLogout.asStateFlow()
 
     init {
         loadProfile()
@@ -95,12 +96,17 @@ class ProfileViewModel(
             }
             is ProfileEvent.ChangePassword -> changePassword()
             is ProfileEvent.ShowLogoutDialog -> {
+                Timber.d("🚪 [ProfileVM] ShowLogoutDialog event received")
                 _state.value = _state.value.copy(showLogoutDialog = true)
             }
             is ProfileEvent.DismissLogoutDialog -> {
+                Timber.d("🚪 [ProfileVM] DismissLogoutDialog event received")
                 _state.value = _state.value.copy(showLogoutDialog = false)
             }
-            is ProfileEvent.ConfirmLogout -> logout()
+            is ProfileEvent.ConfirmLogout -> {
+                Timber.d("🚪 [ProfileVM] ConfirmLogout event received")
+                logout()
+            }
         }
     }
 
@@ -183,12 +189,11 @@ class ProfileViewModel(
                         )
                     }
                     is Result.Error -> {
-                        // Display the exact error message from backend
                         Timber.e("❌ Password change failed: ${result.message}")
                         _state.value = _state.value.copy(
                             isLoading = false,
                             passwordChangeSuccess = false,
-                            passwordChangeError = result.message // This now shows the backend message
+                            passwordChangeError = result.message
                         )
                     }
                 }
@@ -197,11 +202,29 @@ class ProfileViewModel(
     }
 
     private fun logout() {
+        Timber.d("🚪 [ProfileVM] Starting logout process")
+
+        // Close dialog first
+        _state.value = _state.value.copy(showLogoutDialog = false)
+
+        // Launch token clearing in background and immediately trigger logout
         viewModelScope.launch {
-            Timber.d("🚪 Logging out...")
-            _state.value = _state.value.copy(showLogoutDialog = false)
-            authRepository.logout()
-            _logoutEvent.emit(Unit)
+            try {
+                Timber.d("🚪 [ProfileVM] Clearing tokens via repository (async)")
+                authRepository.logout()
+                Timber.d("🚪 [ProfileVM] Tokens cleared")
+            } catch (e: Exception) {
+                Timber.e(e, "🚪 [ProfileVM] Error clearing tokens")
+            }
         }
+
+        // Trigger logout immediately without waiting for token clearing
+        Timber.d("🚪 [ProfileVM] Setting shouldLogout to true")
+        _shouldLogout.value = true
+        Timber.d("🚪 [ProfileVM] Logout triggered")
+    }
+
+    fun resetLogoutFlag() {
+        _shouldLogout.value = false
     }
 }
